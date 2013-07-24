@@ -103,6 +103,12 @@ config AT91_ADC
 	help
 	  Say yes here to build support for Atmel AT91 ADC.
 
+config CHORUS2_ADC
+	depends on SOC_CHORUS2
+	tristate "Chorus2 Analogue-to-Digital Converter"
+	help
+	  This enables the Chorus2 ADC.
+
 config EXYNOS_ADC
 	bool "Exynos ADC driver support"
 	depends on OF

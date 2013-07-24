@@ -1,0 +1,34 @@
+Chorus2 Audio Support Readme
+============================
+
+Audio support for Chorus2 uses the ALSA SoC Audio framework (ASOC).
+
+Supported Data Formats
+======================
+Signed 16bit Little Endian (left and right Data Packed to 32bit frame)
+Signed 24bit Little Endian (Data left justified to fit 32bit frame).
+
+Supported Sample Rates
+======================
+32000 (32KHz)
+48000 (48KHz)
+64000 (64KHz)
+96000 (96KHz)
+
+Development Status
+==================
+Only Playback has been implemented.
+Testing performed on ATP-DP (Metamorph) base layer only (Line Out).
+Playback of PCM Data (in .pcm and .wav formats) is working for all supported
+sample rates and formats.
+Playback via aplay and madplay / mplayer has been tested.
+Note: mpg123 or apps using libmpg do not play due to the use of floating point,
+use libmad(madplay) instead as this uses fixed point maths instead.
+
+Further Work
+=============
+Add support for ATP-DP-Audio (audio Layer) 4 x stereo channels
+Add SPDIF Output support.
+Add SPDIF Input support.
+Add I2S Audio In Support.
+

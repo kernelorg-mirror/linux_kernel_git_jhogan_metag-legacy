@@ -1,0 +1,13 @@
+ImgTec Serial Control Protocol (SCB) I2C Controller for Chorus2 compatible
+boards
+
+Required properties:
+- compatible: Must be "img,chorus2-i2c"
+- reg
+- interrupts
+- id: The bus id number
+- #address-cells = <1>;
+- #size-cells = <0>;
+
+Optional properties:
+- Child nodes conforming to i2s bus binding

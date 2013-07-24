@@ -17,6 +17,7 @@
 #include <linux/device.h>
 #include <linux/dma-mapping.h>
 #include <linux/err.h>
+#include <linux/gpio.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/ioport.h>
@@ -2103,6 +2104,157 @@ static bool mci_wait_reset(struct device *dev, struct dw_mci *host)
 	return false;
 }
 
+/* Check if the block is still locked */
+static bool mci_locked(struct device *dev, struct dw_mci *host)
+{
+	return (mci_readl(host, STATUS) & SDMMC_STATUS_DATA_BUSY) ==
+					SDMMC_STATUS_DATA_BUSY;
+}
+
+/* Bit-bang a clock cycle */
+static void mci_bitbang_clk(struct device *dev, struct dw_mci *host)
+{
+	gpio_set_value(host->pdata->clk_pin, 1);
+	udelay(1);
+	gpio_set_value(host->pdata->clk_pin, 0);
+	udelay(1);
+}
+
+/* Bit-bang a command bit */
+static void mci_bitbang_cmd_bit(struct device *dev, struct dw_mci *host,
+							u8 bit)
+{
+	gpio_set_value(host->pdata->cmd_pin, bit ? 1 : 0);
+	udelay(1);
+	mci_bitbang_clk(dev, host);
+}
+
+/* Bit-bang a command byte */
+static void mci_bitbang_cmd_byte(struct device *dev, struct dw_mci *host,
+								u8 cmd)
+{
+	mci_bitbang_cmd_bit(dev, host, cmd & 0x80);
+	mci_bitbang_cmd_bit(dev, host, cmd & 0x40);
+	mci_bitbang_cmd_bit(dev, host, cmd & 0x20);
+	mci_bitbang_cmd_bit(dev, host, cmd & 0x10);
+	mci_bitbang_cmd_bit(dev, host, cmd & 0x08);
+	mci_bitbang_cmd_bit(dev, host, cmd & 0x04);
+	mci_bitbang_cmd_bit(dev, host, cmd & 0x02);
+	mci_bitbang_cmd_bit(dev, host, cmd & 0x01);
+}
+
+/* Bit-bang CMD0, reset, and test that the block reset cleanly */
+static bool mci_bitbang_reset(struct device *dev, struct dw_mci *host)
+{
+	bool locked = true;
+
+	dev_info(dev, "STATUS = 0x%08x, unlocking by bit-banging CMD0",
+					mci_readl(host, STATUS));
+
+	if (gpio_request_one(host->pdata->clk_pin, GPIOF_OUT_INIT_LOW,
+							"SDIO CLK")) {
+		dev_err(dev, "Failed to take SDIO "
+			"CLK line for reset\n");
+		return false;
+	}
+	if (gpio_request_one(host->pdata->cmd_pin, GPIOF_OUT_INIT_HIGH,
+							"SDIO CMD")) {
+		dev_err(dev, "Failed to take SDIO "
+			"CMD line for reset\n");
+		return false;
+	}
+
+	mci_bitbang_cmd_byte(dev, host, 0xff);
+	mci_bitbang_cmd_byte(dev, host, 0xff);
+	mci_bitbang_cmd_byte(dev, host, 0xff);
+	mci_bitbang_cmd_byte(dev, host, 0xff);
+	mci_bitbang_cmd_byte(dev, host, 0xff);
+	mci_bitbang_cmd_byte(dev, host, 0xff);
+	mci_bitbang_cmd_byte(dev, host, 0xff);
+	mci_bitbang_cmd_byte(dev, host, 0xff);
+	mci_bitbang_cmd_byte(dev, host, 0xff);
+	mci_bitbang_cmd_byte(dev, host, 0xff);
+	mci_bitbang_cmd_byte(dev, host, 0x40);
+	mci_bitbang_cmd_byte(dev, host, 0x00);
+	mci_bitbang_cmd_byte(dev, host, 0x00);
+	mci_bitbang_cmd_byte(dev, host, 0x00);
+	mci_bitbang_cmd_byte(dev, host, 0x00);
+	mci_bitbang_cmd_byte(dev, host, 0x95);
+	mci_bitbang_clk(dev, host);
+
+	gpio_free(host->pdata->cmd_pin);
+	gpio_free(host->pdata->clk_pin);
+
+	if (mci_wait_reset(dev, host))
+		locked = mci_locked(dev, host);
+	if (locked)
+		dev_err(dev, "Failed to unlock, STATUS = 0x%08x",
+					mci_readl(host, STATUS));
+	else
+		dev_info(dev, "Successfully unlocked, STATUS = 0x%08x",
+					mci_readl(host, STATUS));
+
+	return !locked;
+}
+
+/* Clock SDIO CLK until the block resets cleanly */
+static bool mci_unlock(struct device *dev, struct dw_mci *host)
+{
+	bool locked = true;
+	unsigned int tries = 0xffff;
+
+	dev_info(dev, "STATUS = 0x%08x, unlocking by clocking",
+				mci_readl(host, STATUS));
+
+	if (gpio_request_one(host->pdata->clk_pin, GPIOF_OUT_INIT_LOW,
+							"SDIO CLK")) {
+		dev_err(dev, "Failed to take SDIO "
+			"CLK line for reset\n");
+		return false;
+	}
+
+	while (tries-- && locked) {
+		gpio_set_value(host->pdata->clk_pin, 1);
+		udelay(1);
+		gpio_set_value(host->pdata->clk_pin, 0);
+		udelay(1);
+
+		if (mci_wait_reset(dev, host))
+			locked = mci_locked(dev, host);
+		else
+			break;
+	}
+
+	gpio_free(host->pdata->clk_pin);
+
+	if (locked)
+		dev_err(dev, "Failed to unlock, STATUS = 0x%08x",
+					mci_readl(host, STATUS));
+	else
+		dev_info(dev, "Successfully unlocked, STATUS = 0x%08x",
+					mci_readl(host, STATUS));
+
+	return !locked;
+}
+
+/* Reset the block, unlocking it if we can. */
+static bool mci_safe_reset(struct device *dev, struct dw_mci *host)
+{
+	if (!mci_wait_reset(dev, host))
+		return false;
+	if (mci_locked(dev, host)) {
+		if ((host->quirks & DW_MCI_QUIRK_BIT_BANG) &&
+				mci_bitbang_reset(dev, host))
+			return true;
+		if (host->quirks & DW_MCI_QUIRK_GPIO_UNLOCK)
+			return mci_unlock(dev, host);
+		else
+			return false;
+	}
+
+	return true;
+}
+
 #ifdef CONFIG_OF
 static struct dw_mci_of_quirks {
 	char *quirk;
@@ -2268,7 +2420,7 @@ int dw_mci_probe(struct dw_mci *host)
 	}
 
 	/* Reset all blocks */
-	if (!mci_wait_reset(host->dev, host))
+	if (!mci_safe_reset(host->dev, host))
 		return -ENODEV;
 
 	host->dma_ops = host->pdata->dma_ops;

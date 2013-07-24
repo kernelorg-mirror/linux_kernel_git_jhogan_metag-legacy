@@ -169,8 +169,6 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	int i, count;
 	rndis_query_cmplt_type *resp;
 	struct net_device *net;
-	struct rtnl_link_stats64 temp;
-	const struct rtnl_link_stats64 *stats;
 
 	if (!r) return -ENOMEM;
 	resp = (rndis_query_cmplt_type *)r->buf;
@@ -193,7 +191,6 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	resp->InformationBufferOffset = cpu_to_le32(16);
 
 	net = rndis_per_dev_params[configNr].dev;
-	stats = dev_get_stats(net, &temp);
 
 	switch (OID) {
 
@@ -240,9 +237,8 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	/* mandatory */
 	case RNDIS_OID_GEN_MAXIMUM_FRAME_SIZE:
 		pr_debug("%s: RNDIS_OID_GEN_MAXIMUM_FRAME_SIZE\n", __func__);
-		if (rndis_per_dev_params[configNr].dev) {
-			*outbuf = cpu_to_le32(
-				rndis_per_dev_params[configNr].dev->mtu);
+		if (net) {
+			*outbuf = cpu_to_le32(net->mtu);
 			retval = 0;
 		}
 		break;
@@ -263,9 +259,8 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	/* mandatory */
 	case RNDIS_OID_GEN_TRANSMIT_BLOCK_SIZE:
 		pr_debug("%s: RNDIS_OID_GEN_TRANSMIT_BLOCK_SIZE\n", __func__);
-		if (rndis_per_dev_params[configNr].dev) {
-			*outbuf = cpu_to_le32(
-				rndis_per_dev_params[configNr].dev->mtu);
+		if (net) {
+			*outbuf = cpu_to_le32(net->mtu);
 			retval = 0;
 		}
 		break;
@@ -273,9 +268,8 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	/* mandatory */
 	case RNDIS_OID_GEN_RECEIVE_BLOCK_SIZE:
 		pr_debug("%s: RNDIS_OID_GEN_RECEIVE_BLOCK_SIZE\n", __func__);
-		if (rndis_per_dev_params[configNr].dev) {
-			*outbuf = cpu_to_le32(
-				rndis_per_dev_params[configNr].dev->mtu);
+		if (net) {
+			*outbuf = cpu_to_le32(net->mtu);
 			retval = 0;
 		}
 		break;
@@ -357,9 +351,9 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	case RNDIS_OID_GEN_XMIT_OK:
 		if (rndis_debug > 1)
 			pr_debug("%s: RNDIS_OID_GEN_XMIT_OK\n", __func__);
-		if (stats) {
-			*outbuf = cpu_to_le32(stats->tx_packets
-				- stats->tx_errors - stats->tx_dropped);
+		if (net) {
+			*outbuf = cpu_to_le32(net->stats.tx_packets
+				- net->stats.tx_errors - net->stats.tx_dropped);
 			retval = 0;
 		}
 		break;
@@ -368,9 +362,9 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	case RNDIS_OID_GEN_RCV_OK:
 		if (rndis_debug > 1)
 			pr_debug("%s: RNDIS_OID_GEN_RCV_OK\n", __func__);
-		if (stats) {
-			*outbuf = cpu_to_le32(stats->rx_packets
-				- stats->rx_errors - stats->rx_dropped);
+		if (net) {
+			*outbuf = cpu_to_le32(net->stats.rx_packets
+				- net->stats.rx_errors - net->stats.rx_dropped);
 			retval = 0;
 		}
 		break;
@@ -379,8 +373,8 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	case RNDIS_OID_GEN_XMIT_ERROR:
 		if (rndis_debug > 1)
 			pr_debug("%s: RNDIS_OID_GEN_XMIT_ERROR\n", __func__);
-		if (stats) {
-			*outbuf = cpu_to_le32(stats->tx_errors);
+		if (net) {
+			*outbuf = cpu_to_le32(net->stats.tx_errors);
 			retval = 0;
 		}
 		break;
@@ -389,8 +383,8 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	case RNDIS_OID_GEN_RCV_ERROR:
 		if (rndis_debug > 1)
 			pr_debug("%s: RNDIS_OID_GEN_RCV_ERROR\n", __func__);
-		if (stats) {
-			*outbuf = cpu_to_le32(stats->rx_errors);
+		if (net) {
+			*outbuf = cpu_to_le32(net->stats.rx_errors);
 			retval = 0;
 		}
 		break;
@@ -398,8 +392,8 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	/* mandatory */
 	case RNDIS_OID_GEN_RCV_NO_BUFFER:
 		pr_debug("%s: RNDIS_OID_GEN_RCV_NO_BUFFER\n", __func__);
-		if (stats) {
-			*outbuf = cpu_to_le32(stats->rx_dropped);
+		if (net) {
+			*outbuf = cpu_to_le32(net->stats.rx_dropped);
 			retval = 0;
 		}
 		break;
@@ -409,7 +403,7 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	/* mandatory */
 	case RNDIS_OID_802_3_PERMANENT_ADDRESS:
 		pr_debug("%s: RNDIS_OID_802_3_PERMANENT_ADDRESS\n", __func__);
-		if (rndis_per_dev_params[configNr].dev) {
+		if (net) {
 			length = ETH_ALEN;
 			memcpy(outbuf,
 				rndis_per_dev_params[configNr].host_mac,
@@ -421,7 +415,7 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	/* mandatory */
 	case RNDIS_OID_802_3_CURRENT_ADDRESS:
 		pr_debug("%s: RNDIS_OID_802_3_CURRENT_ADDRESS\n", __func__);
-		if (rndis_per_dev_params[configNr].dev) {
+		if (net) {
 			length = ETH_ALEN;
 			memcpy(outbuf,
 				rndis_per_dev_params [configNr].host_mac,
@@ -457,8 +451,8 @@ static int gen_ndis_query_resp(int configNr, u32 OID, u8 *buf,
 	/* mandatory */
 	case RNDIS_OID_802_3_RCV_ERROR_ALIGNMENT:
 		pr_debug("%s: RNDIS_OID_802_3_RCV_ERROR_ALIGNMENT\n", __func__);
-		if (stats) {
-			*outbuf = cpu_to_le32(stats->rx_frame_errors);
+		if (net) {
+			*outbuf = cpu_to_le32(net->stats.rx_frame_errors);
 			retval = 0;
 		}
 		break;

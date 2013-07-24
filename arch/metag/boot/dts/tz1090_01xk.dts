@@ -1,0 +1,75 @@
+/*
+ * Copyright (C) 2012 Imagination Technologies Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+/dts-v1/;
+
+/include/ "tz1090.dtsi"
+
+&xtal2 {
+	clock-frequency = <12000000>;
+};
+
+&pinctrl {
+	pinctrl-names = "default";
+	pinctrl-0 = <	&pinctrl_spi1_cs0
+			&pinctrl_tft
+			&keys_pulldown>;
+
+	keys_pulldown: keys-pulldown {
+		keys {
+			pins =	"pll_on",
+				"pa_on";
+			pull-down;
+		};
+	};
+};
+
+&pdc_pinctrl {
+	pinctrl-names = "default";
+	pinctrl-0 = <	&syswake0_pulldown
+			&ts_irq_tristate>;
+
+	syswake0_pulldown: keys-pulldown {
+		keys {
+			pins =	"sys_wake0";
+			pull-down;
+		};
+	};
+	ts_irq_tristate: ts-irq-tristate {
+		syswake1 {
+			pins =	"sys_wake1";
+			tristate;
+		};
+	};
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&ir {
+	status = "okay";
+};
+
+&i2c0 { /* i2c0 */
+	status = "okay";
+};
+
+&i2c2 { /* i2c2 */
+	bit-rate = <100000>;
+	status = "okay";
+};
+
+&spi1 {
+	status = "okay";
+};
+
+/ {
+	model = "PURE Polaris";
+	compatible =	"img,tz1090-01xk",
+			"toumaz,tz1090", "img,meta";
+};

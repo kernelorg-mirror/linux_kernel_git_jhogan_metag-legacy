@@ -972,6 +972,15 @@ config M54xx_WATCHDOG
 	  To compile this driver as a module, choose M here: the
 	  module will be called m54xx_wdt.
 
+# METAG Architecture
+
+config IMGPDC_WDT
+	tristate "ImgTec PDC Watchdog Timer"
+	depends on METAG
+	help
+	  Hardware driver for the ImgTec PowerDown Controller Watchdog Timer
+	  as found in Meta SoCs such as Comet.
+
 # MicroBlaze Architecture
 
 config XILINX_WATCHDOG

@@ -215,19 +215,9 @@ static inline void writeback_dcache_region(void *start, unsigned long size)
 		l2c_fence(start + size - 1);
 	}
 }
-
-/* Invalidate (may also write back if necessary) */
-static inline void invalidate_dcache_region(void *start, unsigned long size)
-{
-	if (meta_l2c_is_enabled())
-		cachew_region_op(start, size, CACHEW_INVALIDATE_L1D_L2);
-	else
-		metag_data_cache_flush(start, size);
-}
 #else
 #define flush_dcache_region(s, l)	metag_data_cache_flush((s), (l))
 #define writeback_dcache_region(s, l)	do {} while (0)
-#define invalidate_dcache_region(s, l)	flush_dcache_region((s), (l))
 #endif
 
 static inline void copy_to_user_page(struct vm_area_struct *vma,

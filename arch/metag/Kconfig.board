@@ -1,0 +1,162 @@
+if SOC_TZ1090
+
+choice
+	prompt "Board support"
+
+config COMET_NOBOARD
+	bool "None"
+	help
+	  No specific board support.
+
+config COMET_BUB
+	bool "Comet bring-up-board on-board peripherals (flash)"
+	help
+	  Support for the bring-up-board on-board peripherals.
+
+config TZ1090_01XX
+	bool "01SP/01TT (Comet Metamorph/Minimorph) on-board peripherals"
+	help
+	  Support for on-board peripherals on the 01SP (Comet Metamorph) and
+	  01TT (Comet Minimorph) boards.
+
+config POLARIS
+	bool "01XK (Polaris) on-board peripherals"
+	select METAG_COREMEM
+	help
+	  Support for the Polaris on-board peripherals.
+
+endchoice
+
+endif
+
+config COMET_BUB_XTAL3
+	bool "Crystal in XTAL3 (32.768KHz)"
+	depends on COMET_BUB
+	help
+	  Select this option if the bring-up-board has a 32.768 KHz crystal in
+	  XTAL3.
+
+config COMET_BUB_DISPLAY
+	bool "Comet bring-up-board 640x480 TFT display"
+	depends on COMET_BUB
+	select FB
+	select FB_PDP
+	help
+	  Support for the bring-up-board TFT display (640x480).
+
+config COMET_BUB_LCD
+	bool "Comet Bring-up-board LCD display"
+	depends on COMET_BUB
+	help
+	  Support for the LCD Display.
+
+choice
+	prompt "Chorus2 display type"
+	depends on SOC_CHORUS2
+	default CHORUS2_NODISPLAY
+
+config CHORUS2_NODISPLAY
+	bool "None"
+	help
+	  No display support.
+
+config CHORUS2_LCD
+	bool "LCD"
+	help
+	  Support for LCD displays.
+
+config CHORUS2_TFT
+	bool "TFT"
+	help
+	  Support for TFT displays.
+
+endchoice
+
+config ATP_DP
+	bool "ATP-dp on-board peripherals (SD card, flash)"
+	depends on SOC_CHORUS2
+	help
+	  Support for ATP-dp on-board peripherals.
+
+config ATP_DP_DISPLAY1
+	bool "ATP-dp:display1 240x320 TFT board"
+	depends on ATP_DP && CHORUS2_TFT
+	select FB
+	select FB_PDP
+	select I2C
+	select I2C_CHORUS2
+	help
+	  Support for ATP-dp:display1 TFT daughterboard (240x320).
+
+config ATP_DP_DISPLAY2
+	bool "ATP-dp:display2 640x480 TFT board"
+	depends on ATP_DP && CHORUS2_TFT
+	select FB
+	select FB_PDP
+	select I2C
+	select I2C_CHORUS2
+	help
+	  Support for ATP-dp:display2 TFT daughterboard (640x480).
+
+config ATP_DP_LAN1
+	bool "ATP-dp:lan1 ethernet board"
+	depends on ATP_DP
+	help
+	  Support for ATP-dp:lan1 ethernet daughterboard.
+
+config VIVALDI
+	bool "Vivaldi on-board peripherals (flash, wifi)"
+	depends on SOC_CHORUS2
+	help
+	  Support for Vivaldi on-board peripherals.
+
+choice
+	prompt "01SP/01TT Video output"
+	depends on TZ1090_01XX
+	default TZ1090_01XX_HDMI_VID_OUT
+	help
+	  Select which component to drive as the display.
+
+config TZ1090_01XX_NO_VID_OUT
+	bool "None"
+	help
+	  Don't support any Video Out components.
+
+config TZ1090_01XX_HDMI_VID_OUT
+	bool "HDMI"
+	select FB
+	select FB_PDP
+	select FB_MODE_HELPERS
+	help
+	  Suport for 01SP/01TT HDMI Video Out component.
+
+config TZ1090_01XX_DISPLAY
+	bool "640x480 TFT display"
+	select FB
+	select FB_PDP
+	help
+	  Support for the 01SP/01TT TFT display (640x480).
+
+endchoice
+
+config TZ1090_01XX_HDMI_AUDIO
+	bool "01SP/01TT HDMI audio out"
+	depends on TZ1090_01XX
+	depends on TZ1090_01XX_HDMI_VID_OUT
+	help
+	  Support for 01SP/01TT HDMI Audio out component.
+
+config TZ1090_01XX_HDMI_AUDIO_51
+	bool "01SP/01TT HDMI 5.1 audio out"
+	depends on TZ1090_01XX
+	depends on TZ1090_01XX_HDMI_VID_OUT
+	depends on TZ1090_01XX_HDMI_AUDIO
+	help
+	  Configure the HDMI to support 5.1 Audio.
+
+config SENSIA_TOUCHSCREEN
+	bool "Sensia touchscreen"
+	depends on COMET_BUB_DISPLAY || TZ1090_01XX_DISPLAY || POLARIS
+	default y if POLARIS
+	help
+	  Support for the Sensia touchscreen.

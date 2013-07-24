@@ -119,4 +119,17 @@ config CFAG12864B_RATE
 	  If you compile this as a module, you can still override this
 	  value using the module parameters.
 
+config IMG_LCD
+	tristate "IMG LCD Controller"
+	depends on SOC_TZ1090
+	default n
+	help
+	  If you have a LCD controlled by the Imagination Technologies LCD
+	  controller, say Y.
+
+	  To compile this as a module, choose M here:
+	  the module will be called img_lcd.
+
+	  If unsure, say N.
+
 endif # AUXDISPLAY

@@ -9,6 +9,7 @@
 #include <linux/errno.h>
 #include <asm/processor.h>
 #include <asm/cachepart.h>
+#include <asm/global_lock.h>
 #include <asm/metag_isa.h>
 #include <asm/metag_mem.h>
 
@@ -92,6 +93,111 @@ static unsigned int get_thread_cache_size(unsigned int cache, int thread_id)
 	return -1;
 }
 
+#if PAGE_OFFSET >= LINGLOBAL_BASE
+/*
+ * The global icache partition should be useable if big enough, but we can't
+ * trust the icache local partition to be valid.
+ */
+int cachepart_min_iglobal(unsigned int min_size, unsigned int *old_val)
+{
+	if (get_global_icache_size() < min_size) {
+		pr_err("cachepart_min_iglobal: not enough icache available\n");
+		return -ENOMEM;
+	}
+	return 0;
+}
+
+void cachepart_restore_iglobal(unsigned int *old_val)
+{
+	/* cachepart_min_iglobal() hasn't changed anything */
+}
+
+#else
+int cachepart_min_iglobal(unsigned int min_size, unsigned int *old_val)
+{
+	unsigned int lflags;
+	unsigned int cpart;
+	unsigned long cpart_addr = SYSC_ICPART(hard_processor_id());
+	unsigned int ic_size = get_icache_size();
+	unsigned int lic_size;
+	unsigned int temp;
+	int ret = 0;
+
+	__global_lock2(lflags);
+	*old_val = cpart = metag_in32(cpart_addr);
+
+	/* Is the condition possible by halving this thread's local cache? */
+	lic_size = cpart & SYSC_xCPARTL_AND_BITS;
+	if (lic_size) {
+		temp = (ic_size * ((lic_size >> SYSC_xCPARTL_AND_S) + 1)) >> 5;
+		if (temp < min_size) {
+			pr_err("cachepart_min_iglobal: max global icache %u < "
+				"%u\n", temp, min_size);
+			ret = -ENOMEM;
+			goto out;
+		}
+		/*
+		 * It is invalid to attempt to operate the cache with fewer than
+		 * four cache lines allocated to a region (unless it is never
+		 * used).
+		 */
+		if (temp < 4*ICACHE_LINE_BYTES) {
+			pr_err("cachepart_min_iglobal: available global icache "
+				"%u < 4 cache lines\n", temp);
+			ret = -ENOMEM;
+			goto out;
+		}
+	} else {
+		pr_err("cachepart_min_iglobal: no global icache available\n");
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	cpart &= ~(SYSC_xCPARTL_AND_BITS | SYSC_xCPARTG_AND_BITS |
+		   SYSC_xCPARTG_OR_BITS);
+	/* Halve local size, and write into local and global size */
+	lic_size >>= (SYSC_xCPARTL_AND_S + 1);
+	cpart |= lic_size << SYSC_xCPARTL_AND_S;
+	cpart |= lic_size << SYSC_xCPARTG_AND_S;
+	/* Adjust global offset = local offset + local size */
+	temp = (cpart & SYSC_xCPARTL_OR_BITS) >> SYSC_xCPARTL_OR_S;
+	temp += lic_size + 1;
+	cpart |= temp << SYSC_xCPARTG_OR_S;
+
+	/* Disable icache */
+	metag_out32(0, MMCU_ICACHE_CTRL_ADDR);
+	/* Flush icache */
+	metag_out32(1, SYSC_ICACHE_FLUSH);
+	/* Re-partition icache */
+	metag_out32(cpart, cpart_addr);
+	/* Enable icache */
+	metag_out32(1, MMCU_ICACHE_CTRL_ADDR);
+
+out:
+	__global_unlock2(lflags);
+	return ret;
+}
+
+void cachepart_restore_iglobal(unsigned int *old_val)
+{
+	unsigned int flags;
+	unsigned long cpart_addr = SYSC_ICPART(hard_processor_id());
+
+	if (*old_val != metag_in32(cpart_addr)) {
+		__global_lock2(flags);
+		/* Disable icache */
+		metag_out32(0, MMCU_ICACHE_CTRL_ADDR);
+		/* Flush icache */
+		metag_out32(1, SYSC_ICACHE_FLUSH);
+		/* Re-partition icache */
+		metag_out32(*old_val, cpart_addr);
+		/* Enable icache */
+		metag_out32(1, MMCU_ICACHE_CTRL_ADDR);
+		__global_unlock2(flags);
+	}
+}
+#endif
+
 void check_for_cache_aliasing(int thread_id)
 {
 	unsigned int thread_cache_size;
@@ -100,22 +206,23 @@ void check_for_cache_aliasing(int thread_id)
 		thread_cache_size =
 				get_thread_cache_size(cache_type, thread_id);
 		if (thread_cache_size < 0)
-			pr_emerg("Can't read %s cache size", \
+			pr_emerg("Can't read %s cache size\n",
 				 cache_type ? "DCACHE" : "ICACHE");
 		else if (thread_cache_size == 0)
 			/* Cache is off. No need to check for aliasing */
 			continue;
 		if (thread_cache_size / CACHE_ASSOCIATIVITY > PAGE_SIZE) {
-			pr_emerg("Cache aliasing detected in %s on Thread %d",
+			pr_emerg("Potential cache aliasing detected in %s on Thread %d\n",
 				 cache_type ? "DCACHE" : "ICACHE", thread_id);
-			pr_warn("Total %s size: %u bytes",
-				cache_type ? "DCACHE" : "ICACHE ",
+			pr_warn("Total %s size: %u bytes\n",
+				cache_type ? "DCACHE" : "ICACHE",
 				cache_type ? get_dcache_size()
 				: get_icache_size());
-			pr_warn("Thread %s size: %d bytes",
+			pr_warn("Thread %s size: %d bytes\n",
 				cache_type ? "CACHE" : "ICACHE",
 				thread_cache_size);
-			pr_warn("Page Size: %lu bytes", PAGE_SIZE);
+			pr_warn("Page Size: %lu bytes\n", PAGE_SIZE);
+			panic("Potential cache aliasing detected");
 		}
 	}
 }

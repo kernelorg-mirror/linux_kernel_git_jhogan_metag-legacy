@@ -1,0 +1,71 @@
+
+
+uccp - char driver for ImgTec's Ensigma UCCPs
+=============================================
+
+
+Configuration
+=============
+
+	Kernel config options (found in Device Drivers -> Character Devices).
+	* IMG_UCCP
+		Enables the UCCP character driver.
+
+	The UCCPs are set up with platform data, which you may need to enable
+	in Processor type and features.
+
+
+Ioctl Interface
+===============
+
+#include <linux/uccp.h>
+
+The following ioctls can be used with each uccp device (/dev/uccp0 etc).
+
+* UCCPIO_GETREGION
+	Takes a pointer to a struct uccp_region.
+
+	Gets the offset and size of a specific type of region in the uccp
+	memory area. Where applicable the region returned will be specific to
+	the UCCP the ioctl is performed on. Set the type field to one of the
+	following constants before the ioctl, and the other fields will be
+	filled in if no error occurred:
+	* UCCP_REGION_ALL
+		The entire UCCP memory region.
+	* UCCP_REGION_SYS_INTERNAL
+		System internal memory.
+	* UCCP_REGION_MTX
+		MTX specific memory.
+	* UCCP_REGION_MCP_16_BIT
+		MCP 16bit memory.
+	* UCCP_REGION_MCP_24_BIT
+		MCP 24bit memory.
+
+* UCCPIO_WRREG
+* UCCPIO_RDREG
+	Takes a pointer to a struct uccp_reg.
+
+	Read or write to a register on the UCCP (on the system bus). Set the
+	op field to one of the following:
+	* UCCP_REG_DIRECT
+		Accesses the register directly.
+	* UCCP_REG_INDIRECT (write only)
+		Accesses the register indirectly.
+	* UCCP_REG_MCPPERIP
+		Accesses MCP peripheral memory (indirectly using
+		MCP_SYS_HACC_CMD).
+	* UCCP_REG_MCPPERIP_PACK
+		Accesses MCP peripheral memory (indirectly using
+		MCP_SYS_HACC_CMD with the PACK bit set).
+	And set the reg field to the register number you want to use.
+
+* UCCPIO_CLRMCREQ
+* UCCPIO_SETMCREQ
+* UCCPIO_GETMCREQ
+	Takes a pointer to a struct uccp_mcreq.
+
+	Clear set or get an mcreq field, defining a memory mapping from
+	physical memory into bulk memory.
+
+* UCCPIO_SRST
+	Soft reset the UCCP.

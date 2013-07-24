@@ -37,6 +37,10 @@ struct thread_info {
 	mm_segment_t addr_limit;	/* thread address space */
 	struct restart_block restart_block;
 
+#ifdef CONFIG_SOC_CHORUS2
+	struct pt_regs *replay_regs;
+	unsigned long pad;
+#endif
 	u8 supervisor_stack[0];
 };
 

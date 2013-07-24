@@ -6,6 +6,7 @@ config METAG
 	select GENERIC_IRQ_SHOW
 	select GENERIC_SMP_IDLE_THREAD
 	select HAVE_64BIT_ALIGNED_ACCESS
+	select HAVE_ARCH_KGDB
 	select HAVE_ARCH_TRACEHOOK
 	select HAVE_C_RECORDMCOUNT
 	select HAVE_DEBUG_KMEMLEAK
@@ -95,6 +96,12 @@ config HIGHMEM
 source "arch/metag/mm/Kconfig"
 
 source "arch/metag/Kconfig.soc"
+
+config METAG_ROM_WRAPPERS
+	bool
+	help
+	  This indicates that this core needs to use patched versions of the
+	  ROM for its interrupt entry points.
 
 config METAG_META12
 	bool
@@ -254,6 +261,16 @@ config CMDLINE_FORCE
 	  override those passed by the boot loader.
 
 endmenu
+
+menu "Board support"
+
+source "arch/metag/Kconfig.board"
+
+endmenu
+
+source "arch/metag/drivers/Kconfig"
+
+source "arch/metag/kernel/cpu/Kconfig"
 
 source "kernel/Kconfig.preempt"
 

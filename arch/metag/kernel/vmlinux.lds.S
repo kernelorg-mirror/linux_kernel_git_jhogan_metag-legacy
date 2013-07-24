@@ -19,6 +19,11 @@ SECTIONS
   __stext = .;
   HEAD_TEXT_SECTION
   .text : {
+#ifdef CONFIG_SOC_CHORUS2
+	___replay_text_start = .;
+	*(.text.replay_catchbuffer)
+	___replay_text_end = .;
+#endif
 	TEXT_TEXT
 	SCHED_TEXT
 	LOCK_TEXT

@@ -34,6 +34,7 @@
 #include <linux/highmem.h>
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
+#include <linux/static_key.h>
 
 #include <asm/tlbflush.h>
 #include <asm/mmu.h>
@@ -426,6 +427,19 @@ static int __init dma_alloc_init(void)
 	return ret;
 }
 early_initcall(dma_alloc_init);
+
+#ifdef CONFIG_METAG_L2C
+/* Invalidate (may also write back if necessary) */
+static inline void invalidate_dcache_region(void *start, unsigned long size)
+{
+	if (meta_l2c_has_invalidate())
+		cachew_region_op(start, size, CACHEW_INVALIDATE_L1D_L2);
+	else
+		flush_dcache_region(start, size);
+}
+#else
+#define invalidate_dcache_region(s, l)	flush_dcache_region((s), (l))
+#endif
 
 /*
  * make an area consistent to devices.

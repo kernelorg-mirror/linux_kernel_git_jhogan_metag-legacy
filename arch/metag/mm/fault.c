@@ -43,6 +43,38 @@ static void clear_cbuf_entry(struct pt_regs *regs, unsigned long addr,
 	}
 }
 
+#ifdef CONFIG_SOC_CHORUS2
+static void check_cached_pte(struct mm_struct *mm, unsigned long address,
+			     struct pt_regs *regs)
+{
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+	pte_t *pte;
+
+	pgd = pgd_offset(mm, address);
+	if (!pgd_present(*pgd))
+		return;
+
+	pud = pud_offset(pgd, address);
+	if (!pud_present(*pud))
+		return;
+
+	pmd = pmd_offset(pud, address);
+	if (!pmd_present(*pmd))
+		return;
+
+	pte = pte_offset_kernel(pmd, address);
+	if (pte_present(*pte) &&
+	    !pte_write(*pte) &&
+	    pte_val(*pte) & _PAGE_CACHEABLE) {
+		pr_err("write to read-only cached page (addr %#x, pc %#x, pte %#lx) is invalid\n",
+		       (int) address, regs->ctx.CurrPC, pte_val(*pte));
+	}
+}
+#endif
+
+
 int show_unhandled_signals = 1;
 
 int do_page_fault(struct pt_regs *regs, unsigned long address,
@@ -121,6 +153,9 @@ good_area:
 	if (write_access) {
 		if (!(vma->vm_flags & VM_WRITE))
 			goto bad_area;
+#ifdef CONFIG_SOC_CHORUS2
+		check_cached_pte(mm, address, regs);
+#endif
 	} else {
 		if (!(vma->vm_flags & (VM_READ | VM_EXEC | VM_WRITE)))
 			goto bad_area;

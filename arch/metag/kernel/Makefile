@@ -5,6 +5,8 @@
 extra-y	+= head.o
 extra-y	+= vmlinux.lds
 
+obj-y	+= cpu/
+
 obj-y	+= cachepart.o
 obj-y	+= clock.o
 obj-y	+= core_reg.o
@@ -31,9 +33,11 @@ obj-$(CONFIG_METAG_COREMEM)		+= coremem.o
 obj-$(CONFIG_METAG_DA)			+= da.o
 obj-$(CONFIG_DYNAMIC_FTRACE)		+= ftrace.o
 obj-$(CONFIG_FUNCTION_TRACER)		+= ftrace_stub.o
+obj-$(CONFIG_KGDB)			+= kgdb.o
 obj-$(CONFIG_MODULES)			+= metag_ksyms.o
 obj-$(CONFIG_MODULES)			+= module.o
 obj-$(CONFIG_PERF_EVENTS)		+= perf_callchain.o
+obj-$(CONFIG_METAG_ROM_WRAPPERS)	+= romwrappers.o
 obj-$(CONFIG_SMP)			+= smp.o
 obj-$(CONFIG_METAG_SUSPEND_MEM)		+= suspend.o
 obj-$(CONFIG_METAG_USER_TCM)		+= tcm.o

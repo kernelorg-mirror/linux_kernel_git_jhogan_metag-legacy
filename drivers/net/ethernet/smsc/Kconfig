@@ -6,7 +6,7 @@ config NET_VENDOR_SMSC
 	bool "SMC (SMSC)/Western Digital devices"
 	default y
 	depends on ARM || ISA || MAC || ARM64 || MIPS || M32R || SUPERH || \
-		BLACKFIN || MN10300 || COLDFIRE || PCI || PCMCIA
+		BLACKFIN || MN10300 || COLDFIRE || PCI || PCMCIA || METAG
 	---help---
 	  If you have a network (Ethernet) card belonging to this class, say Y
 	  and read the Ethernet-HOWTO, available from
@@ -97,7 +97,7 @@ config SMC911X
 
 config SMSC911X
 	tristate "SMSC LAN911x/LAN921x families embedded ethernet support"
-	depends on (ARM || SUPERH || BLACKFIN || MIPS || MN10300)
+	depends on (ARM || SUPERH || BLACKFIN || METAG || MIPS || MN10300)
 	select CRC32
 	select NET_CORE
 	select MII

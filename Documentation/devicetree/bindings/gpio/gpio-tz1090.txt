@@ -1,0 +1,83 @@
+ImgTec TZ1090 GPIO Controller
+
+Required properties:
+- compatible: Compatible property value should be "img,tz1090-gpio".
+
+- reg: Physical base address of the controller and length of memory mapped
+  region.
+
+- #address-cells: Should be 1 (for bank subnodes)
+
+- #size-cells: Should be 0 (for bank subnodes)
+
+- Each bank of GPIOs should have a subnode to represent it.
+
+  Bank subnode required properties:
+  - reg: Index of bank in the range 0 to 2.
+
+  - gpio-controller: Specifies that the node is a gpio controller.
+
+  - #gpio-cells: Should be 2. The syntax of the gpio specifier used by client
+    nodes should have the following values.
+       <[phandle of the gpio controller node]
+        [gpio number within the gpio bank]
+        [gpio flags]>
+
+    Values for gpio specifier:
+    - GPIO number: a value in the range 0 to 29.
+    - GPIO flags: bit field of flags:
+        1: active low
+
+  Bank subnode optional properties:
+  - gpio-ranges: Mapping to pin controller pins
+
+  - interrupts: Interrupt for the entire bank
+
+  - interrupt-controller: Specifies that the node is an interrupt controller
+
+  - #interrupt-cells: Should be 2. The syntax of the interrupt specifier used by
+    client nodes should have the following values.
+       <[phandle of the interurupt controller]
+        [gpio number within the gpio bank]
+        [irq flags]>
+
+    Values for irq specifier:
+    - GPIO number: a value in the range 0 to 29
+    - IRQ flags: value to describe edge and level triggering
+        1: trigger on rising edge
+        2: trigger on falling edge
+        3: trigger on both rising and falling edges
+        4: trigger when high
+        8: trigger when low
+
+
+
+Example:
+
+	gpios: gpio-controller@02005800 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "img,tz1090-gpio";
+		reg = <0x02005800 0x90>;
+
+		/* bank 0 with an interrupt */
+		gpios0: bank@0 {
+			#gpio-cells = <2>;
+			#interrupt-cells = <2>;
+			reg = <0>;
+			interrupts = <13 4 /* level */>;
+			gpio-controller;
+			gpio-ranges = <&pinctrl 0 30>;
+			interrupt-controller;
+		};
+
+		/* bank 2 without interrupt */
+		gpios2: bank@2 {
+			#gpio-cells = <2>;
+			reg = <2>;
+			gpio-controller;
+			gpio-ranges = <&pinctrl 60 30>;
+		};
+	};
+
+

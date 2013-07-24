@@ -1,0 +1,12 @@
+CosmicCircuits Tansen audio codec.
+
+Required properties:
+- compatible : Must be "cosmic,tansen".
+- reg        : The GTI port register.
+
+Example:
+
+tansen: tansen@020059B8 {
+	compatible = "cosmic,tansen";
+	reg = <0x020059B8 0x4>; /* GTI CTRL register */
+};

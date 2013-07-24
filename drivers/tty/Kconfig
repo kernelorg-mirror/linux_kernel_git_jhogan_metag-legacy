@@ -419,4 +419,20 @@ config DA_CONSOLE
 	help
 	  This enables a console on a Dash channel.
 
+config KGDB_DA
+	bool "Use KGDB over a DA channel"
+	depends on DA_TTY && KGDB
+	default y
+	help
+	  This enables the use of KGDB over a DA channel, allowing KGDB to be
+	  used remotely or when a serial port isn't available.
+
+config KGDB_DA_CHANNEL
+	int "KGDB DA channel"
+	depends on KGDB_DA
+	range 2 6
+	default 3
+	help
+	  DA channel to use for KGDB.
+
 endif # TTY

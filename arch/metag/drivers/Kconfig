@@ -1,0 +1,9 @@
+menu "Additional Meta Device Drivers"
+
+config IMG_DMAC
+	depends on SOC_CHORUS2
+	bool "IMG DMAC Driver"
+	help
+	  This enables the IMG DMAC driver
+
+endmenu

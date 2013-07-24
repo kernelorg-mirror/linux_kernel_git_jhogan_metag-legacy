@@ -11,7 +11,10 @@
  */
 
 #include <linux/clk-provider.h>
+#include <linux/clkdev.h>
 #include <linux/module.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
 #include <linux/slab.h>
 #include <linux/io.h>
 #include <linux/err.h>
@@ -154,6 +157,14 @@ static int clk_divider_bestdiv(struct clk_hw *hw, unsigned long rate,
 	if (!rate)
 		rate = 1;
 
+	/* if read only, just return current value */
+	if (divider->flags & CLK_DIVIDER_READ_ONLY) {
+		bestdiv = readl(divider->reg) >> divider->shift;
+		bestdiv &= div_mask(divider);
+		bestdiv = _get_div(divider, bestdiv);
+		return bestdiv;
+	}
+
 	maxdiv = _get_maxdiv(divider);
 
 	if (!(__clk_get_flags(hw->clk) & CLK_SET_RATE_PARENT)) {
@@ -238,8 +249,8 @@ EXPORT_SYMBOL_GPL(clk_divider_ops);
 static struct clk *_register_divider(struct device *dev, const char *name,
 		const char *parent_name, unsigned long flags,
 		void __iomem *reg, u8 shift, u8 width,
-		u8 clk_divider_flags, const struct clk_div_table *table,
-		spinlock_t *lock)
+		u8 clk_divider_flags, u32 default_divide,
+		const struct clk_div_table *table, spinlock_t *lock)
 {
 	struct clk_divider *div;
 	struct clk *clk;
@@ -266,6 +277,10 @@ static struct clk *_register_divider(struct device *dev, const char *name,
 	div->lock = lock;
 	div->hw.init = &init;
 	div->table = table;
+
+	/* set default value */
+	if (default_divide)
+		clk_divider_set_rate(&div->hw, 1, default_divide);
 
 	/* register the clock */
 	clk = clk_register(dev, &div->hw);
@@ -294,7 +309,7 @@ struct clk *clk_register_divider(struct device *dev, const char *name,
 		u8 clk_divider_flags, spinlock_t *lock)
 {
 	return _register_divider(dev, name, parent_name, flags, reg, shift,
-			width, clk_divider_flags, NULL, lock);
+			width, clk_divider_flags, 0, NULL, lock);
 }
 
 /**
@@ -318,5 +333,68 @@ struct clk *clk_register_divider_table(struct device *dev, const char *name,
 		spinlock_t *lock)
 {
 	return _register_divider(dev, name, parent_name, flags, reg, shift,
-			width, clk_divider_flags, table, lock);
+			width, clk_divider_flags, 0, table, lock);
 }
+
+#ifdef CONFIG_OF
+/**
+ * of_divider_clk_setup() - Setup function for simple clock divider
+ */
+void __init of_divider_clk_setup(struct device_node *node)
+{
+	struct clk *clk;
+	const char *clk_name = node->name;
+	u32 shift, width, divide;
+	void __iomem *reg;
+	const char *parent_name;
+	u8 flags = 0;
+
+	of_property_read_string(node, "clock-output-names", &clk_name);
+
+	reg = of_iomap(node, 0);
+	if (!reg) {
+		pr_err("%s(%s): of_iomap failed\n",
+		       __func__, clk_name);
+		return;
+	}
+
+	if (of_property_read_u32(node, "shift", &shift)) {
+		pr_err("%s(%s): could not read shift property\n",
+		       __func__, clk_name);
+		return;
+	}
+
+	if (of_property_read_u32(node, "width", &width)) {
+		pr_err("%s(%s): could not read width property\n",
+		       __func__, clk_name);
+		return;
+	}
+
+	parent_name = of_clk_get_parent_name(node, 0);
+	if (!parent_name) {
+		pr_err("%s(%s): could not read parent clock\n",
+		       __func__, clk_name);
+		return;
+	}
+
+	if (of_find_property(node, "one-based", NULL))
+		flags |= CLK_DIVIDER_ONE_BASED;
+	if (of_find_property(node, "power-of-two", NULL))
+		flags |= CLK_DIVIDER_POWER_OF_TWO;
+	if (of_find_property(node, "linux,clk-read-only", NULL))
+		flags |= CLK_DIVIDER_READ_ONLY;
+
+	if (of_property_read_u32(node, "default-divide", &divide))
+		divide = 0;
+
+	clk = _register_divider(NULL, clk_name, parent_name,
+				CLK_SET_RATE_PARENT, reg, shift, width, flags,
+				divide, NULL, NULL);
+	if (!IS_ERR(clk)) {
+		of_clk_add_provider(node, of_clk_src_simple_get, clk);
+		clk_register_clkdev(clk, clk_name, NULL);
+	}
+}
+EXPORT_SYMBOL_GPL(of_divider_clk_setup);
+CLK_OF_DECLARE(divider_clk, "divider-clock", of_divider_clk_setup);
+#endif /* CONFIG_OF */

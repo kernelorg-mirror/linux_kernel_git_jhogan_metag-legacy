@@ -135,8 +135,12 @@ my %text_sections = (
      ".spinlock.text" => 1,
      ".irqentry.text" => 1,
      ".kprobes.text" => 1,
-     ".text.unlikely" => 1,
 );
+
+sub is_valid_section
+{
+    return defined($text_sections{$1}) || $1 =~ m/^\.text\./;
+}
 
 # Note: we are nice to C-programmers here, thus we skip the '||='-idiom.
 $objdump = 'objdump' if (!$objdump);
@@ -490,7 +494,7 @@ while (<IN>) {
 	$read_headers = 0;
 
 	# Only record text sections that we know are safe
-	$read_function = defined($text_sections{$1});
+	$read_function = is_valid_section($1);
 	# print out any recorded offsets
 	update_funcs();
 

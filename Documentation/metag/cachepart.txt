@@ -1,0 +1,40 @@
+
+Meta Cache Partitioning
+=======================
+
+The cachepart functions are for manipulating the local and global per hardware
+thread cache partitions. See arch/metag/include/asm/cachepart.h for the
+documentation of the functions.
+
+The main use of this at the moment is to make sure that the current thread has a
+global cache partition that is big enough to hold locked in core cache during a
+standby (see coremem.txt for more information).
+
+
+cachepart_min_iglobal
+---------------------
+
+This function rearranges the current thread's cache partitions so that global
+cache is available, specifically private global cache if CACHEPART_PRIV_GLOBAL
+is specified in the flags (e.g. for use by locked in core cache mode). If the
+rearrangement would violate the constraints of the architecture, for example by
+having a cache partition that is too small, or smaller than the requested size,
+an error code is returned and nothing is changed. For example, if the icache is
+mapped like this:
+
+0          1/4         1/2         3/4          1
++-----------+-----------+-----------------------+
+| T0 local  | T1 local  | T0/T1 global          |
++-----------+-----------+-----------------------+
+
+It would be rearranged to the following when called from T0 with the PRIV_GLOBAL
+flag:
+
+0    1/8   1/4         1/2         3/4          1
++-----+-----+-----------+-----------------------+
+| T0L | T0G | T1 local  | T1 global             |
++-----+-----+-----------+-----------------------+
+
+And would be left alone without the PRIV_GLOBAL flag (since T0's global
+partition is likely already big enough). Upon calling cachepart_restore_iglobal,
+the cache partitions would be restored to their previous layout.

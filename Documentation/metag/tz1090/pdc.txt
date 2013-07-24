@@ -1,0 +1,15 @@
+
+Powerdown Controller (PDC) and SYS_WAKE inputs
+==============================================
+
+Implemented a PDC driver, primarily to handle the sys_wake input pins.  It makes
+a simple sys_wake interface available so that boards can set up the sys_wake
+pins in the appropriate way. For example the bring up board has buttons wired up
+to 3 of the sys_wake inputs, and one is configured as a wake button. They can
+also be configured to call a callback function when they fire, or to cause the
+watchdog to reset the system if they are held for several seconds. Additionally
+each sys_wake's interrupt mode can be set.
+
+These capabilities would allow an input driver to be added for the buttons on
+the bring up board so that userland can react to the button presses and choose
+which ones should be able to wake the system.

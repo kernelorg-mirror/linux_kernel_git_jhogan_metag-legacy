@@ -1,0 +1,40 @@
+* Imagination Technologies Meta DMA Controller (MDC)
+
+Required properties:
+- #dma-cells : Must be <2>. Used by slave devices to request a DMA channel.
+- compatible : Should be "img,mdc-dma".
+- reg        : Should contain DMA registers location and length. This should include
+  all of the per-channel registers.
+- interrupts : Should contain all of the per-channel DMA interrupts.
+
+Examples:
+
+dma: dma-controller@0200c000 {
+	#dma-cells = <2>;
+	compatible = "img,mdc-dma";
+	reg = <0x0200c000 0x1000>;
+	interrupts = < 21 4
+		       22 4
+		       23 4
+		       24 4
+		       25 4
+		       26 4
+		       27 4
+		       28 4 >;
+};
+
+DMA clients connected to the Meta DMA Controller (MDC) must comply to the format
+described in the dma.txt file, using a two-cell specifier for each channel. The
+cells are:
+
+1. The number of the DMA peripheral.
+2. The DMA request line number.
+
+Example:
+
+spi1: spi@02004e00 {
+	...
+	dmas = <&dma 7 0xffffffff
+		&dma 8 0xffffffff>; /* -1 for any channel */
+	dma-names = "rx", "tx";
+};

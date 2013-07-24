@@ -1,0 +1,17 @@
+* ImgTec Infrared (IR) decoder
+
+Required properties:
+- compatible:		Should be "img,ir"
+- reg:			physical base address of the controller and length of
+			memory mapped region.
+- interrupts:		The interrupt number to the cpu should be specified. The
+			number of cells representing a interrupt depends on the
+			parent interrupt controller.
+
+Example:
+
+	ir@02006200 {
+		compatible = "img,ir";
+		reg = <0x02006200 0x100>;
+		interrupts = <29 4>;
+	};

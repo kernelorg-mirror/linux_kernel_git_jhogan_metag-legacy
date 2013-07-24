@@ -18,6 +18,7 @@
  *  - NEXIO/iNexio
  *  - Elo TouchSystems 2700 IntelliTouch
  *  - EasyTouch USB Dual/Multi touch controller from Data Modul
+ *  - Lilliput 8in HDMI Monitor touchscreen (special case)
  *
  * Copyright (C) 2004-2007 by Daniel Ritz <daniel.ritz@gmx.ch>
  * Copyright (C) by Todd E. Johnson (mtouchusb.c)
@@ -45,7 +46,7 @@
  *
  *****************************************************************************/
 
-//#define DEBUG
+/* #define DEBUG */
 
 #include <linux/kernel.h>
 #include <linux/slab.h>
@@ -142,6 +143,7 @@ enum {
 	DEVTYPE_NEXIO,
 	DEVTYPE_ELO,
 	DEVTYPE_ETOUCH,
+	DEVTYPE_LILLIPUT,
 };
 
 #define USB_DEVICE_HID_CLASS(vend, prod) \
@@ -249,6 +251,10 @@ static const struct usb_device_id usbtouch_devices[] = {
 
 #ifdef CONFIG_TOUCHSCREEN_USB_EASYTOUCH
 	{USB_DEVICE(0x7374, 0x0001), .driver_info = DEVTYPE_ETOUCH},
+#endif
+
+#ifdef CONFIG_TOUCHSCREEN_USB_LILLIPUT
+	{USB_DEVICE(0x0eef, 0x0001), .driver_info = DEVTYPE_LILLIPUT},
 #endif
 
 	{}
@@ -1045,6 +1051,55 @@ static int nexio_read_data(struct usbtouch_usb *usbtouch, unsigned char *pkt)
 }
 #endif
 
+/*****************************************************************************
+ * Lilliput 8in VGA/HDMI monitor touchscreen
+ *
+ * All sources I have found suggest that the touchscreen part for this device
+ * is the eGalax Touchscreen driver (including the vendor and product IDs).
+ * However, when this device was not functioning correctly, the captures from
+ * a USB analyser suggest that the touchscreen is not driven by the eGalax
+ * part.
+ */
+#ifdef CONFIG_TOUCHSCREEN_USB_LILLIPUT
+
+#define LILLIPUT_PKT_SYNC		0x02
+
+/*
+ * Calibration Values, array of short ints:
+ * x-min, y-min, x-max, y-max
+ */
+static short calib_vals[4];
+module_param_array (calib_vals, short, NULL, 0664);
+MODULE_PARM_DESC(calib_vals, \
+	"An array of 4x 16-bit values containing the min/max x/y values and "\
+	"step values");
+
+
+static int lilliput_read_data(struct usbtouch_usb *dev, unsigned char *pkt)
+{
+	unsigned short x, y;
+	if (pkt[0] != LILLIPUT_PKT_SYNC)
+		return 0;
+
+	/* Negate the y value, as the touchscreen has a bottom-left origin */
+	x = ((pkt[5] & 0x0f) << 8) | (pkt[4] & 0xff);
+	y = (((pkt[3] & 0x0f) << 8) | (pkt[2] & 0xff)) ^ 0x0fff;
+
+	/* Ensure we don't divide by zero for non-set calibration values */
+	if (calib_vals[0] && calib_vals[1]) {
+		x = ((x - calib_vals[0]) * 3072) /
+				(calib_vals[2] - calib_vals[0]) + 512;
+		y = ((y - calib_vals[1]) * 3072) /
+				(calib_vals[3] - calib_vals[1]) + 512;
+	}
+
+	dev->x = x;
+	dev->y = y;
+	dev->touch = pkt[1] & 0x01;
+
+	return 1;
+}
+#endif
 
 /*****************************************************************************
  * ELO part
@@ -1282,6 +1337,17 @@ static struct usbtouch_device_info usbtouch_dev_info[] = {
 		.process_pkt	= usbtouch_process_multi,
 		.get_pkt_len	= etouch_get_pkt_len,
 		.read_data	= etouch_read_data,
+	},
+#endif
+
+#ifdef CONFIG_TOUCHSCREEN_USB_LILLIPUT
+	[DEVTYPE_LILLIPUT] = {
+		.min_xc		= 0x0000,
+		.max_xc		= 0x0fff,
+		.min_yc		= 0x0000,
+		.max_yc		= 0x0fff,
+		.rept_size	= 6,
+		.read_data	= lilliput_read_data,
 	},
 #endif
 };

@@ -1,6 +1,7 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/delay.h>
+#include <linux/static_key.h>
 
 #include <asm/l2cache.h>
 #include <asm/metag_isa.h>
@@ -12,6 +13,7 @@ static int l2cache_init_pf = 1;
 
 int l2c_pfenable;
 
+struct static_key l2c_has_invalidate = STATIC_KEY_INIT_FALSE;
 static volatile u32 l2c_testdata[16] __initdata __aligned(64);
 
 static int __init parse_l2cache(char *p)
@@ -37,6 +39,29 @@ static int __init parse_l2cache_pf(char *p)
 	return 0;
 }
 early_param("l2cache_pf", parse_l2cache_pf);
+
+static int __init meta_l2c_test_invalidate(void)
+{
+	if (meta_l2c_is_enabled() && meta_l2c_is_writeback()) {
+		/* force 1's into memory */
+		l2c_testdata[0] = 0x11111111;
+		__builtin_meta2_cachewd((void *)l2c_testdata,
+					CACHEW_FLUSH_L1D_L2);
+		/* dirty the L2 with 2's */
+		l2c_testdata[0] = 0x22222222;
+		/* read it back to fill a line in L1 too */
+		(void)l2c_testdata[0];
+		/* attempt an invalidation of both caches */
+		__builtin_meta2_cachewd((void *)l2c_testdata,
+					CACHEW_INVALIDATE_L1D_L2);
+		/*
+		 * We should now read back the data from memory if the
+		 * invalidate worked
+		 */
+		return l2c_testdata[0] == 0x11111111;
+	}
+	return 0;
+}
 
 static int __init meta_l2c_setup(void)
 {
@@ -88,6 +113,15 @@ static int __init meta_l2c_setup(void)
 	} else {
 		pr_info("L2 Cache: Not enabling prefetch\n");
 	}
+
+	/*
+	 * Test whether invalidate (CACHEWD 0xC) is usable.
+	 */
+	if (meta_l2c_test_invalidate())
+		static_key_slow_inc(&l2c_has_invalidate);
+
+	if (!meta_l2c_has_invalidate())
+		pr_info("L2 Cache: Invalidation op disabled\n");
 
 	return 0;
 }

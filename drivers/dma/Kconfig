@@ -263,6 +263,28 @@ config IMX_DMA
 	  Support the i.MX DMA engine. This engine is integrated into
 	  Freescale i.MX1/21/27 chips.
 
+config MDC_DMA
+	bool "MDC DMA support"
+	select DMA_ENGINE
+	help
+	  Support the Imagination Technologies Meta DMA Controller (MDC).
+
+config MDC_DMA_TESTS
+	depends on MDC_DMA
+	tristate "MDC DMA Test Client"
+	help
+	  Simple MDC DMA test client. Say N unless you're debugging
+	  the MDC DMA driver.
+
+config TZ1090_MDC_DMA
+	bool "TZ1090 specific callbacks for the MDC DMA driver"
+	depends on SOC_TZ1090
+	select MDC_DMA
+	default y
+	help
+	  This selects support for TZ1090 SoC specific callbacks for
+	  the MDC DMA controller.
+
 config MXS_DMA
 	bool "MXS DMA support"
 	depends on SOC_IMX23 || SOC_IMX28 || SOC_IMX6Q

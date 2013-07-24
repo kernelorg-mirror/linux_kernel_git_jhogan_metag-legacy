@@ -1,0 +1,33 @@
+
+Meta Core Memory
+================
+
+The files coremem.h and coremem.c implement the main interface which allows
+suspend code to copy a suspend routine into core memory so that DDR can be put
+into self refresh and the DDRC powered down.
+
+metag_coremem_alloc() reserves a section of core mem according to some flags.
+
+metag_coremem_free() indicates that the memory is finished with.
+
+metag_coremem_push() memcpy's data to the next space in the core memory and
+moves the free pointer onwards. This is intended for copying asm function code
+into instruction memory.
+
+metag_coremem_alloc uses a simple array of coremem regions to find an
+appropriate region to allocate. This array is defined for TZ1090 only at the
+moment (soc/tz1090/coremem.c).
+
+
+Locked in Core Cache Mode
+-------------------------
+
+Locked in core instruction cache memory can be asked for. After the code is
+prefetched or executed to lock the code into the icache it is possible to
+power down the DDR controller. Since this cache is thread specific it does not
+interfere with the running of other threads.
+
+The actual setup is done by metag_coremem_push (which can only be called once
+after a metag_coremem_alloc). See soc/tz1090/suspend.S for an example of
+prefetching code into the icache to get it locked in. It is not currently
+possible to use ICACHE and DCACHE coremem regions at the same time.

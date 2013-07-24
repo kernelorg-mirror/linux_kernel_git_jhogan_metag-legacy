@@ -16,10 +16,12 @@
 #include <linux/export.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
+#include <linux/kgdb.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
 #include <linux/sched.h>
 #include <linux/serial.h>
+#include <linux/serial_core.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/string.h>
@@ -673,5 +675,80 @@ struct console dash_console = {
 	.flags = CON_PRINTBUFFER,
 	.index = 1,
 };
+
+#endif
+
+#ifdef CONFIG_KGDB_DA
+
+/* read buffer to reduce small DA channel reads */
+static unsigned int kgdbda_rbuflen;
+static unsigned int kgdbda_rpos;
+static char kgdbda_rbuf[RX_BUF_SIZE];
+
+/* write buffer to reduce small DA channel writes */
+static unsigned int kgdbda_wbuflen;
+static char kgdbda_wbuf[RX_BUF_SIZE];
+
+/* read a character from the read buffer, filling from DA debug channel */
+static int kgdbda_read_char(void)
+{
+	int received = 0;
+	/* no more data, try and get some more from the DA debug channel */
+	if (kgdbda_rpos >= kgdbda_rbuflen) {
+		kgdbda_rpos = 0;
+		kgdbda_rbuflen = 0;
+		if (chancall(RDBUF, CONFIG_KGDB_DA_CHANNEL, sizeof(kgdbda_rbuf),
+			     (void *)kgdbda_rbuf, &received) == CONAOK) {
+			if (received > sizeof(kgdbda_rbuf))
+				received = 0;
+			kgdbda_rbuflen = received;
+		}
+		if (!kgdbda_rbuflen)
+			return NO_POLL_CHAR;
+	}
+	pr_devel("kgdbda r %c\n", kgdbda_rbuf[kgdbda_rpos]);
+	return kgdbda_rbuf[kgdbda_rpos++];
+}
+
+/* flush the write buffer to the DA debug channel */
+static void kgdbda_flush(void)
+{
+	int number_written;
+	if (kgdbda_wbuflen) {
+		chancall(WRBUF, CONFIG_KGDB_DA_CHANNEL, kgdbda_wbuflen,
+			 kgdbda_wbuf, &number_written);
+		kgdbda_wbuflen = 0;
+	}
+}
+
+/* write a character into the write buffer, flushing if necessary */
+static void kgdbda_write_char(u8 chr)
+{
+	pr_devel("kgdbda w %c\n", chr);
+	kgdbda_wbuf[kgdbda_wbuflen++] = chr;
+	if (kgdbda_wbuflen >= sizeof(kgdbda_wbuf))
+		kgdbda_flush();
+}
+
+static struct kgdb_io kgdbda_io_ops = {
+	.name		= "kgdbda",
+	.read_char	= kgdbda_read_char,
+	.write_char	= kgdbda_write_char,
+	.flush		= kgdbda_flush,
+};
+
+static int __init kgdbda_init(void)
+{
+	kgdb_register_io_module(&kgdbda_io_ops);
+	return 0;
+}
+
+static void kgdbda_cleanup(void)
+{
+	kgdb_unregister_io_module(&kgdbda_io_ops);
+}
+
+module_init(kgdbda_init);
+module_exit(kgdbda_cleanup);
 
 #endif

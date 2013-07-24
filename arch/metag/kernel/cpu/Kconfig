@@ -1,0 +1,53 @@
+config METAG_CORE_SYSFS
+	bool "Meta core sysfs interface"
+	select SYSFS
+	help
+	  This enables a sysfs driver that gives access to the CPU core
+	  parameters such as cycle counters and configuration registers.
+
+config METAG_WRITE_COMBINER
+	bool "Meta write combiner sysfs interface"
+	depends on METAG_CORE_SYSFS
+	help
+	  This enables a sysfs driver that gives access to the CPU core
+	  write combiner hardware.
+
+config METAG_MEM_ARBITER
+	bool "Meta memory arbiter sysfs interface"
+	depends on METAG_CORE_SYSFS
+	help
+	  This enables a sysfs driver that gives access to the CPU core
+	  memory arbiter hardware.
+
+config METAG_CYCLE_COUNTER
+	bool "Meta cycle counters"
+	depends on METAG_CORE_SYSFS
+	help
+	  This enables a sysfs driver that gives access to the CPU core
+	  cycle counters.
+
+config METAG_PERFORMANCE_COUNTER
+	bool "Meta performance counters"
+	depends on METAG_CORE_SYSFS
+	help
+	  This enables a sysfs driver that gives access to the CPU core
+	  performance counters.
+
+config METAG_AMA_COUNTER
+	bool "Meta Automatic MIPs Allocation counters"
+	depends on METAG_CORE_SYSFS
+	help
+	  This enables a sysfs driver that gives access to the CPU core
+	  Automatic MIPs Allocation counters.
+
+config METAG_L2C_CONTROL
+	bool "Level 2 Cache control"
+	depends on METAG_CORE_SYSFS && METAG_L2C
+	help
+	  This enables a sysfs driver that provides access to the CPU core level
+	  2 cache configuration (information like line size, ways of
+	  associativity, total size, whether unified, and the hardware revision
+	  number). It also provides controls to enable and disable the L2 cache,
+	  to enable and disable prefetch, and to trigger write backs and
+	  flushes, mostly for debug purposes. They can be found in
+	  /sys/devices/system/cache/l2/.

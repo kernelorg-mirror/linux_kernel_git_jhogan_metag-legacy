@@ -1,0 +1,364 @@
+/*
+ * Copyright (C) 2012 Imagination Technologies Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+
+/include/ "skeleton.dtsi"
+/include/ "tz1090_clk.dtsi"
+
+/*
+ * default scb clock to sys_clk_undeleted to work around clock
+ * domain crossing problems
+ */
+&scb_sw {
+	default-clock = <1>;	/* sys_clk_undeleted */
+};
+
+/ {
+	compatible = "toumaz,tz1090", "img,meta";
+
+	interrupt-parent = <&intc>;
+
+	clocks = <&meta_core_clk>;
+	clock-names = "core";
+
+	aliases {
+		spi1 = &spi1;
+	};
+
+	intc: interrupt-controller {
+		compatible = "img,meta-intc";
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		num-banks = <2>;
+		/* only soc-bus and 2d are edge sensitive */
+		default-level = <0xfffeffff 0xb>;
+	};
+
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		socif: socif@02008c2c {
+			compatible = "img,tz1090-socif";
+			reg = <0x02008c2c 0x8>;
+			interrupts = <16 0 /* edge */>;
+		};
+
+		dma: dma-controller@0200c000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			#dma-cells = <2>;
+			compatible = "img,tz1090-mdc-dma";
+			reg = <0x0200c000 0x1000>;
+			interrupts = < 21 4 /* level */
+				       22 4 /* level */
+				       23 4 /* level */
+				       24 4 /* level */
+				       25 4 /* level */
+				       26 4 /* level */
+				       27 4 /* level */
+				       28 4 /* level */ >;
+
+		};
+
+		pinctrl: pinctrl@02005800 {
+			#gpio-range-cells = <3>;
+			compatible = "img,tz1090-pinctrl";
+			reg = <0x02005800 0xe4>;
+
+			/* common pin configurations */
+			pinctrl_uart0: uart0 {
+				uart0_cfg {
+					pins =	"uart0_rxd",
+						"uart0_txd";
+					function = "perip";
+				};
+			};
+			pinctrl_uart0_flow: uart0_flow {
+				uart0_cfg {
+					pins =	"uart0_cts",
+						"uart0_rts";
+					function = "perip";
+				};
+			};
+			pinctrl_uart1: uart1 {
+				uart1_cfg {
+					pins =	"uart1";
+					function = "perip";
+				};
+			};
+
+			pinctrl_spi1: spi1 {
+				spi1_cfg {
+					pins =	"spi1_mclk",
+						"spi1_dout",
+						"spi1_din";
+					function = "perip";
+				};
+			};
+			pinctrl_spi1_cs0: spi1_cs0 {
+				spi1_cfg {
+					pins =	"spi1_cs0";
+					function = "perip";
+				};
+			};
+
+			pinctrl_tft: tft {
+				tft_cfg {
+					pins =	"tft";
+					function = "tft";
+				};
+			};
+
+			pinctrl_sdh: sdh {
+				sdh_cfg {
+					pins =	"sdio",
+						"sdh";
+					function = "sdh";
+				};
+			};
+
+			pinctrl_scb0: scb0 {
+				scb0_cfg {
+					pins =	"scb0";
+					function = "perip";
+				};
+			};
+			pinctrl_scb1: scb1 {
+				scb1_cfg {
+					pins =	"scb1";
+					function = "perip";
+				};
+			};
+			pinctrl_scb2: scb2 {
+				scb2_cfg {
+					pins =	"scb2";
+					function = "perip";
+				};
+			};
+		};
+
+		pdc_pinctrl: pinctrl@02006500 {
+			#gpio-range-cells = <3>;
+			compatible = "img,tz1090-pdc-pinctrl";
+			reg = <0x02006500 0x100>;
+		};
+
+		gpios: gpios@02005800 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "img,tz1090-gpio";
+			reg = <0x02005800 0x90>;
+
+			gpios0: bank@0 {
+				gpio-controller;
+				interrupt-controller;
+				#gpio-cells = <2>;
+				#interrupt-cells = <2>;
+				reg = <0>;
+				interrupts = <13 4 /* level */>;
+				gpio-ranges = <&pinctrl 0 0 30>;
+			};
+			gpios1: bank@1 {
+				gpio-controller;
+				interrupt-controller;
+				#gpio-cells = <2>;
+				#interrupt-cells = <2>;
+				reg = <1>;
+				interrupts = <14 4 /* level */>;
+				gpio-ranges = <&pinctrl 0 30 30>;
+			};
+			gpios2: bank@2 {
+				gpio-controller;
+				interrupt-controller;
+				#gpio-cells = <2>;
+				#interrupt-cells = <2>;
+				reg = <2>;
+				interrupts = <15 4 /* level */>;
+				gpio-ranges = <&pinctrl 0 60 30>;
+			};
+		};
+
+		i2s: tz1090-i2s@02004f00 {
+			compatible = "img,i2s";
+			reg = < 0x02004f00 0x100 /* out */
+				0x02005000 0x100 /* in */>;
+			interrupts = < 9 4 /* level */
+				       10 4 /* level */
+				       11 4 /* level */
+				       12 4 /* level */>;
+			interrupt-names = "output0", "output1",
+					  "output2", "input";
+
+			clocks = <&i2sout_sysclk>;
+			dmas = <&dma 9 0xffffffff /* out */
+				&dma 10 0xffffffff /* in */>;
+		};
+
+		uart0: uart@02004b00 {
+			compatible = "snps,dw-apb-uart";
+			pinctrl-names = "default";
+			pinctrl-0 = <	&pinctrl_uart0>;
+			reg = <0x02004b00 0x100>;
+			interrupts = <4 4 /* level */>;
+			clocks = <&uart_clk>;
+			clock-frequency = <1843200>;
+			reg-shift = <2>;
+			reg-io-width = <4>;
+			status = "disabled";
+		};
+		uart1: uart@02004c00 {
+			compatible = "snps,dw-apb-uart";
+			pinctrl-names = "default";
+			pinctrl-0 = <	&pinctrl_uart1>;
+			reg = <0x02004c00 0x100>;
+			interrupts = <5 4 /* level */>;
+			clocks = <&uart_clk>;
+			clock-frequency = <1843200>;
+			reg-shift = <2>;
+			reg-io-width = <4>;
+			status = "disabled";
+		};
+
+		pdc: pdc@0x02006000 {
+			interrupt-controller;
+			#interrupt-cells = <3>;
+
+			reg = <0x02006000 0x1000>;
+			compatible = "img,pdc-intc";
+
+			num-perips = <3>;
+			num-syswakes = <3>;
+
+			interrupts = <18 4 /* level */>, /* Syswakes */
+			             <30 4 /* level */>, /* Perip 0 (RTC) */
+			             <29 4 /* level */>, /* Perip 1 (IR) */
+			             <31 4 /* level */>; /* Perip 2 (WDT) */
+		};
+
+		pdc_gpios: gpios@02006500 {
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			compatible = "img,tz1090-pdc-gpio";
+			reg = <0x02006500 0x100>;
+
+			interrupt-parent = <&pdc>;
+			interrupts =	<1 0 0>,	/* Syswake 0 */
+					<1 1 0>,	/* Syswake 1 */
+					<1 2 0>;	/* Syswake 2 */
+			gpio-ranges = <&pdc_pinctrl 0 0 7>;
+		};
+
+		wdt: wdt@02006000 {
+			compatible = "img,pdc-wdt";
+			reg = <0x02006000 0x20>;
+			interrupt-parent = <&pdc>;
+			interrupts = <0 2 4>;
+		};
+
+		rtc: rtc@02006100 {
+			compatible = "img,pdc-rtc";
+			reg = <0x02006100 0x100>,
+			      <0x02006038 0x8>;	/* SW_PROT[6-7] */
+			reg-names = "regs", "nonvolatile";
+			interrupt-parent = <&pdc>;
+			interrupts = <0 0 4>;
+
+			/* setting the time takes 3 seconds */
+			time-set-delay	= <3>;
+			/* alarm interrupts arrive 2 seconds late */
+			alarm-irq-delay	= <2>;
+		};
+
+		ir: ir@02006200 {
+			compatible = "img,ir";
+			reg = <0x02006200 0x100>;
+			interrupt-parent = <&pdc>;
+			interrupts = <0 1 4>;
+			status = "disabled";
+		};
+
+		i2c0: i2c@02004400 {
+			compatible = "img,scb";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_scb0>;
+			reg = <0x02004400 0x200>;
+			interrupts = <0 4 /* level */>;
+			clocks = <&scb0_sysclk>;
+			linux,i2c-index = <0>;
+			quirks = <0x1>;
+			status = "disabled";
+		};
+
+		i2c1: i2c@02004600 {
+			compatible = "img,scb";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_scb1>;
+			reg = <0x02004600 0x200>;
+			interrupts = <1 4 /* level */>;
+			clocks = <&scb1_sysclk>;
+			linux,i2c-index = <1>;
+			quirks = <0x1>;
+			status = "disabled";
+		};
+
+		i2c2: i2c@02004800 {
+			compatible = "img,scb";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_scb2>;
+			reg = <0x02004800 0x200>;
+			interrupts = <2 4 /* level */>;
+			clocks = <&scb2_sysclk>;
+			linux,i2c-index = <2>;
+			quirks = <0x1>;
+			status = "disabled";
+		};
+
+		spi1: spi@02004e00 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "img,spi";
+			pinctrl-names = "default";
+			pinctrl-0 = <	&pinctrl_spi1>;
+			reg = <0x02004e00 0x100>;
+			interrupts = <8 4 /* level */>;
+			clocks = <&spim1_sysclk>;
+			num-cs = <3>;
+			clock-frequency = <40000000>;
+			dmas = <&dma 7 0xffffffff
+				&dma 8 0xffffffff>; /* -1 for any channel */
+			dma-names = "rx", "tx";
+			status = "disabled";
+
+		};
+
+		twod: twod@02008900 {
+			compatible = "img,tz1090-2d";
+			reg =	<0x02008900 0x100>,	/* slave port */
+				<0x02008c00 0x400>;	/* HEP registers */
+			interrupts = <34 0 /* edge */>;
+			clocks = <&twod_sysclk>;
+		};
+
+		tansen: tansen@020059B8 {
+			compatible = "cosmic,tansen";
+			reg = <0x020059B8 0x4>; /* GTI CTRL register */
+		};
+
+		sound {
+			compatible = "img,tz1090-audio";
+			reg = < 0x020059E0 0x4
+				0x020059E4 0x4
+				0x020059B8 0x4>;
+			img,i2s-controller = <&i2s>;
+			img,audio-codec = <&tansen>;
+		};
+	};
+};

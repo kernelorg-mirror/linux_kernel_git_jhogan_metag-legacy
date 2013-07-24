@@ -1,0 +1,19 @@
+config SND_TZ1090_SOC
+	tristate "SoC Audio for Toumaz Xenif TZ1090 (Comet)"
+	depends on SOC_TZ1090 && TZ1090_MDC_DMA
+	select SND_SOC_DMAENGINE_PCM
+	help
+	  Say Y or M if you want to add support for codecs attached to the
+	  TZ1090 I2S Audio out interface.
+
+config SND_TZ1090_SOC_I2S
+	tristate
+
+config SND_TZ1090_SOC_TZ1090_01XX
+	tristate "SoC Audio support for 01SP/01TT Base Layer"
+	depends on TZ1090_01XX || COMET_BUB
+	select SND_TZ1090_SOC
+	select SND_TZ1090_SOC_I2S
+	select SND_SOC_TANSEN
+	help
+	  Say Y if you want Audio support for the Comet Metamorph/Minimorph/BuB.

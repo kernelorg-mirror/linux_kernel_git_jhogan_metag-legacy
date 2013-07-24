@@ -49,6 +49,7 @@ config USB_ARCH_HAS_EHCI
 	default y if ARCH_MMP
 	default y if MACH_LOONGSON1
 	default y if PLAT_ORION
+	default y if SOC_CHORUS2
 	default PCI
 
 # some non-PCI HCDs implement xHCI
@@ -83,6 +84,7 @@ config USB_ARCH_HAS_HCD
 	default y if ARM				# SL-811
 	default y if BLACKFIN				# SL-811
 	default y if SUPERH				# r8a66597-hcd
+	default y if SOC_TZ1090
 	default PCI
 
 # ARM SA1111 chips have a non-PCI based "OHCI-compatible" USB host interface.
@@ -125,6 +127,8 @@ config USB
 if USB
 
 source "drivers/usb/core/Kconfig"
+
+source "drivers/usb/dwc_otg/Kconfig"
 
 source "drivers/usb/mon/Kconfig"
 

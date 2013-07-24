@@ -2237,6 +2237,78 @@ config FB_DA8XX
 	  found on DA8xx/OMAP-L1xx SoCs.
 	  If unsure, say N.
 
+config FB_PDP
+	bool "PDP framebuffer support"
+	depends on FB && HAVE_CLK && ( SOC_CHORUS2 || SOC_TZ1090 )
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	select FB_CFB_IMAGEBLIT
+	default n
+	help
+	  Frame buffer driver for the on-chip Chorus2 PDP.
+
+config FB_PDP_GFX_VIDEOMEM
+	int "Graphics framebuffer memory"
+	depends on FB_PDP
+	default 1048576
+	help
+	  Default amount of video memory in bytes for the graphics framebuffer.
+
+config FB_PDP_GFX_FIX_NATIVE_RES
+	bool "Graphics framebuffer fixed to native resolution"
+	depends on FB_PDP
+	default y
+	help
+	  Forces the graphics framebuffer to always be at the native screen
+	  resolution.
+
+config FB_PDP_QUEUE_CLUT
+	depends on FB_PDP
+	def_bool n
+
+config FB_PDP_VID
+	bool "Video plane framebuffer"
+	depends on FB_PDP
+	default y
+	help
+	  Frame buffer driver for the video plane of the PDP.
+
+config FB_PDP_VID_VIDEOMEM
+	int "Video framebuffer memory"
+	depends on FB_PDP_VID
+	default 1048576
+	help
+	  Default amount of video memory in bytes for the video framebuffer.
+
+config FB_PDP_USERMEM
+	bool "User-provided memory support"
+	depends on FB_PDP
+	help
+	  Provides an ioctl which allows userland code to provide memory for
+	  use as framebuffers. See Documentation/fb/pdpfb.txt for details.
+
+config FB_PDP_PDUMP
+	bool "Generate Pdump trace to kernel log"
+	depends on FB_PDP
+	help
+	  Generates a Pdump trace of PDP accesses to the kernel log which can be
+	  extracted by a script to run on a simulator.
+
+	  If unsure press 'N'.
+
+choice
+	prompt "Pdump format"
+	depends on FB_PDP_PDUMP
+	default FB_PDP_PDUMP_V1
+
+config FB_PDP_PDUMP_V1
+	bool "Version 1"
+
+config FB_PDP_PDUMP_V2
+	bool "Version 2"
+
+endchoice
+
 config FB_VIRTUAL
 	tristate "Virtual Frame Buffer support (ONLY FOR TESTING!)"
 	depends on FB

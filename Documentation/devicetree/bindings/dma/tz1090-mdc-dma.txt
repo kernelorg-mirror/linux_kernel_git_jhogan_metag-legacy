@@ -1,0 +1,23 @@
+* Toumaz Xenif TZ1090 (Comet) specific callbacks for the Imagination Technologies Meta DMA Controller (MDC)
+
+Required properties:
+- compatible   : Should be "img,tz1090-mdc-dma".
+- The remaining properties are described in the img-mdc-dma.txt file.
+
+Examples
+
+dma: dma-controller@0200c000 {
+	#dma-cells = <2>;
+	compatible = "img,tz1090-mdc-dma";
+	reg = <0x0200c000 0x1000>;
+	interrupts = < 21 4
+		       22 4
+		       23 4
+		       24 4
+		       25 4
+		       26 4
+		       27 4
+		       28 4 >;
+};
+
+DMA clients should use the properties described in the img-mdc-dma.txt file.

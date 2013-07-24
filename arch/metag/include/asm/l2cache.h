@@ -15,6 +15,15 @@ extern int l2c_pfenable;
 /* defined in arch/metag/drivers/core-sysfs.c */
 extern struct sysdev_class cache_sysclass;
 
+/*
+ * Telling whether there is a usable invalidation operation.
+ * Be sure to include <linux/static_key.h> if you use this.
+ */
+struct static_key;
+extern struct static_key l2c_has_invalidate;
+
+#define meta_l2c_has_invalidate() static_key_false(&l2c_has_invalidate)
+
 static inline void wr_fence(void);
 
 /*
@@ -229,6 +238,7 @@ static inline int meta_l2c_writeback(void)
 
 #else /* CONFIG_METAG_L2C */
 
+#define meta_l2c_has_invalidate()	0
 #define meta_l2c_config()		0
 #define meta_l2c_is_present()		0
 #define meta_l2c_is_writeback()		0

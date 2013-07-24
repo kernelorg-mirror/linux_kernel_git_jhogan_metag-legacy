@@ -1,0 +1,37 @@
+Binding for generic integer clock divider.
+
+This binding uses the common clock binding[1].
+
+[1] Documentation/devicetree/bindings/clock/clock-bindings.txt
+
+Required properties:
+- compatible         : Shall be "divider-clock".
+- #clock-cells       : From common clock binding; shall be set to 0.
+- reg                : Address of divider register.
+- shift              : Shift of field in divider register.
+- width              : Width of field in divider register.
+- clocks             : From common clock binding.
+
+Required source clocks:
+- 0                  : Reference clock which is divided to produce the output
+                       clock (doesn't have to be named).
+
+Optional properties:
+- one-based          : Indicates that register field stores the divisor directly
+                       rather than the default of divisor-1.
+- power-of-two       : Indicates that register field stores log2(divisor) rather
+                       that the default of divisor-1.
+- clock-output-names : From common clock binding.
+- linux,clk-read-only: Flag to indicate that the divide shouldn't be altered.
+- default-divide     : Default divider value.
+
+Example:
+	clock {
+		compatible = "divider-clock";
+		#clock-cells = <0>;
+		clocks = <&sys_pll>;
+		reg = <0x02005914 0x4>;	/* CR_TOP_SYSCLK_DIV */
+		shift = <0>;		/* CR_TOP_SYSDIV */
+		width = <8>;
+		clock-output-names = "sysclk_div";
+	};

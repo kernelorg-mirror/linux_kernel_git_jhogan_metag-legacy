@@ -401,6 +401,8 @@ sgi-ioc4.txt
 	- description of the SGI IOC4 PCI (multi function) device.
 sgi-visws.txt
 	- short blurb on the SGI Visual Workstations.
+sgx2d.txt
+	- description of the SGX 2D char device ioctl interface.
 sh/
 	- directory with info on porting Linux to a new architecture.
 smsc_ece1099.txt
@@ -433,6 +435,8 @@ thermal/
 	- directory with information on managing thermal issues (CPU/temp)
 trace/
 	- directory with info on tracing technologies within linux
+uccp.txt
+	- description of the UCCP char device ioctl interface.
 unaligned-memory-access.txt
 	- info on how to avoid arch breaking unaligned memory access in code.
 unicode.txt

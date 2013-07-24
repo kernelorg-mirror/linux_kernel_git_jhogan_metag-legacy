@@ -209,6 +209,10 @@ struct dw_mci_dma_ops {
 #define DW_MCI_QUIRK_HIGHSPEED			BIT(2)
 /* Unreliable card detection */
 #define DW_MCI_QUIRK_BROKEN_CARD_DETECTION	BIT(3)
+/* Capable of unlocking via GPIO clk_pin */
+#define DW_MCI_QUIRK_GPIO_UNLOCK		BIT(4)
+/* Capable of bit-banging reset */
+#define DW_MCI_QUIRK_BIT_BANG			BIT(5)
 
 /* Slot level quirks */
 /* This slot has no write protect */
@@ -230,6 +234,8 @@ struct dw_mci_board {
 
 	u32 quirks; /* Workaround / Quirk flags */
 	unsigned int bus_hz; /* Clock speed at the cclk_in pad */
+	unsigned int clk_pin; /* GPIO of CLK for clear lock/bit-bang reset */
+	unsigned int cmd_pin; /* GPIO of CMD for bit-bang reset */
 
 	u32 caps;	/* Capabilities */
 	u32 caps2;	/* More capabilities */

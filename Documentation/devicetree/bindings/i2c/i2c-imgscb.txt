@@ -1,0 +1,27 @@
+ImgTec Serial Control Protocol (SCB) I2C Controller:
+
+Required properties:
+- compatible : Must be "img,scb";
+- reg
+- interrupts
+- clocks : A reference to the SCB clock node;
+- bit-rate : Speed of bus in Hz;
+- bus-delay : Bus delay in ms;
+- quirks : Quirks present on the hardware:
+  - 0x00000001 : write read fence.
+                 2 writes required to ensure subsequent read reflects the
+                 effects of a prior write, due to clock domain crossing problem.
+  - 0x00000002 : atomic mode only.
+                 Automatic mode unreliable when using different clock domain for
+                 data clock. This can be worked around by forcing atomic mode
+                 only with this quirk (slower), or using the same clock domain.
+- #address-cells = <1>;
+- #size-cells = <0>;
+
+Optional properties:
+- pinctrl-names : Can contain "default"
+- pinctrl-0 : Pin control maps for when enabled
+- linux,i2c-index: Can be used to override the I2C bus number. This is useful
+  when some of the I2C adapters are used by other non-Linux cores so would get
+  numbered incorrectly by default.
+- Child nodes conforming to i2c bus binding

@@ -1,0 +1,14 @@
+Binding for TZ1090 SOCIF error controller.
+
+Required properties:
+- compatible         : Shall be "img,tz1090-socif".
+- reg                : Address of CR_SOCIF_TIMEOUT with size 0x8 to include
+                       CR_SOCIF_STATUS too.
+- interrupts         : Interrupt specifier for SOCIF error interrupt.
+
+Example:
+	socif {
+		compatible = "img,tz1090-socif";
+		reg = <0x02008c2c 0x8>;
+		interrupts = <16 0>;
+	};

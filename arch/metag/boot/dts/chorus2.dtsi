@@ -1,0 +1,60 @@
+/*
+ * Copyright (C) 2012 Imagination Technologies Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version2 as
+ * published by the Free Software Foundation.
+ */
+
+/include/ "skeleton.dtsi"
+
+/ {
+	compatible = "frontier,chorus2", "img,meta";
+
+	interrupt-parent = <&intc>;
+
+	intc: interrupt-controller {
+		compatible = "img,meta-intc";
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		num-banks = <3>;
+		no-mask;
+		default-level = <0x0 0x00030fff 0xff0007e0>;
+	};
+
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		uart0: uart@02020000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x02020000 0x1000>;
+			interrupts = <48 4 /* level */>;
+			clock-frequency = <1843200>;
+			reg-shift = <2>;
+			reg-io-width = <4>;
+		};
+		uart1: uart@02021000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x02021000 0x1000>;
+			interrupts = <49 4 /* level */>;
+			clock-frequency = <1843200>;
+			reg-shift = <2>;
+			reg-io-width = <4>;
+		};
+		i2c0: i2c@0200A000 {
+			compatible = "img,chorus2-i2c";
+			reg = <0x0200A000 0x1000>;
+			interrupts = <77 1 /* edge */>;
+			id = <0>;
+		};
+		i2c1: i2c@0200B000 {
+			compatible = "img,chorus2-i2c";
+			reg = <0x0200B000 0x1000>;
+			interrupts = <78 1 /* edge */>;
+			id = <1>;
+		};
+	};
+};

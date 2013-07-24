@@ -1,0 +1,14 @@
+* ImgTec PowerDown Controller (PDC) Watchdog Timer (WDT)
+
+Required properties:
+- compatible : Should be "img,pdc-wdt"
+- reg : Should contain WDT registers location and length
+- interrupts : Should contain WDT interrupt
+
+Examples:
+
+wdt@02006000 {
+	compatible = "img,pdc-wdt";
+	reg = <0x02006000 0x20>;
+	interrupts = <31 4>;
+};

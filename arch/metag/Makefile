@@ -20,7 +20,7 @@ checkflags-$(CONFIG_METAG_META12)	+= -DMETAC_1_2
 checkflags-$(CONFIG_METAG_META21)	+= -DMETAC_2_1
 CHECKFLAGS				+= -D__metag__ $(checkflags-y)
 
-KBUILD_DEFCONFIG			:= meta2_defconfig
+KBUILD_DEFCONFIG			:= tz1090_defconfig
 
 sflags-$(CONFIG_METAG_META12)		+= -mmetac=1.2
 ifeq ($(CONFIG_METAG_META12),y)
@@ -46,9 +46,33 @@ core-y					+= arch/metag/boot/dts/
 core-y					+= arch/metag/kernel/
 core-y					+= arch/metag/mm/
 
+# SoCs
+socdir-$(CONFIG_SOC_CHORUS2)		+= chorus2
+socdir-$(CONFIG_SOC_TZ1090)		+= tz1090
+
+socdirs		:= $(filter-out ., $(patsubst %,%/,$(socdir-y)))
+core-y		+= $(addprefix arch/metag/soc/, $(socdirs))
+
+# Boards
+machdir-$(CONFIG_ATP_DP)		+= atp-dp
+machdir-$(CONFIG_ATP_DP_DISPLAY1)	+= atp-dp/display1
+machdir-$(CONFIG_ATP_DP_DISPLAY2)	+= atp-dp/display2
+machdir-$(CONFIG_ATP_DP_LAN1)		+= atp-dp/lan1
+machdir-$(CONFIG_COMET_BUB)		+= comet-bub
+machdir-$(CONFIG_COMET_BUB_DISPLAY)	+= comet-bub/display
+machdir-$(CONFIG_COMET_BUB_LCD)		+= comet-bub/lcd
+machdir-$(CONFIG_POLARIS)		+= polaris
+machdir-$(CONFIG_SENSIA_TOUCHSCREEN)	+= sensia-touchscreen
+machdir-$(CONFIG_TZ1090_01XX)		+= TZ1090-01XX
+machdir-$(CONFIG_VIVALDI)		+= vivaldi
+
+machdirs	:= $(filter-out ., $(patsubst %,%/,$(machdir-y)))
+core-y		+= $(addprefix arch/metag/boards/, $(machdirs))
+
 libs-y					+= arch/metag/lib/
 libs-y					+= arch/metag/tbx/
 
+drivers-y				+= arch/metag/drivers/
 drivers-$(CONFIG_OPROFILE)		+= arch/metag/oprofile/
 
 boot					:= arch/metag/boot

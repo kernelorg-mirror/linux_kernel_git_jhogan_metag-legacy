@@ -62,3 +62,7 @@ obj-$(CONFIG_JS_RTC)		+= js-rtc.o
 js-rtc-y = rtc.o
 
 obj-$(CONFIG_TILE_SROM)		+= tile-srom.o
+
+obj-$(CONFIG_IMG_UCCP)		+= uccp.o
+obj-$(CONFIG_IMG_SGX2D)		+= sgx2d.o
+obj-$(CONFIG_IMG_EVT)		+= img_event_timer.o

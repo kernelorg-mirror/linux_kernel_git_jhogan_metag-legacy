@@ -232,6 +232,18 @@ config GPIO_TS5500
 	  blocks of the TS-5500: DIO1, DIO2 and the LCD port, and the TS-5600
 	  LCD port.
 
+config GPIO_TZ1090
+	def_bool y
+	depends on SOC_TZ1090
+	help
+	  Say yes here to support Toumaz Xenif TZ1090 GPIOs.
+
+config GPIO_TZ1090_PDC
+	def_bool y
+	depends on SOC_TZ1090
+	help
+	  Say yes here to support Toumaz Xenif TZ1090 PDC GPIOs.
+
 config GPIO_XILINX
 	bool "Xilinx GPIO support"
 	depends on PPC_OF || MICROBLAZE
@@ -660,7 +672,7 @@ config GPIO_74X164
 comment "AC97 GPIO expanders:"
 
 config GPIO_UCB1400
-	bool "Philips UCB1400 GPIO"
+	tristate "Philips UCB1400 GPIO"
 	depends on UCB1400_CORE
 	help
 	  This enables support for the Philips UCB1400 GPIO pins.

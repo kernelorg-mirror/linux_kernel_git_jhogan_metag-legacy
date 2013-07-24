@@ -1,0 +1,10 @@
+#ifndef __ASM_SOC_CHORUS2_PDP_H
+#define __ASM_SOC_CHORUS2_PDP_H
+
+#define PDP_BASE_ADDR	0x02027000
+#define PDP_SIZE		0x800
+
+#define PDI_BASE_ADDR	0x0201B000
+#define PDI_SIZE		0x100
+
+#endif

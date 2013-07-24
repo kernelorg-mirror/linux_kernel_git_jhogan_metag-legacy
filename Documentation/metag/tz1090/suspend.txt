@@ -1,0 +1,99 @@
+
+Comet Suspend Modes
+===================
+
+See Documentation/metag/tz1090/pdc.txt for PDC and SYS_WAKEUP information.
+
+
+Standby
+-------
+
+Comet power management code (soc/tz1090/pm.c) implements standby, and works
+using the metag coremem interface (see coremem.txt) to copy assembly code into
+core memory. It also disables peripheral clocks and the clock outputs.
+
+Note that on SMP in global space this process may not work correctly if another
+thread is locking in code into the same global icache partition and there isn't
+enough of it for the suspend function to be locked in. The SoC will simply not
+wake up as it will have tried to fetch the suspend function from the DDR while
+the DDRC is powered down. This can be worked around if the core code memory is
+not in use by using that instead of locked in cache lines (see call to
+metag_coremem_alloc in comet_pm_standby).
+
+The actual assembly code is in soc/tz1090/suspend.S. The reason for hand coding
+the assembly is so that it can be easily and safely copied into core memory
+(copying C functions is trickier as it's hard to know the length of the code in
+them, and we need to be sure it's position independent after loading).  It
+powers down the DDR controller, first putting the DDR into self refresh mode.
+It bypasses the PLL by switching the system clock to XTAL1, and then powers down
+the PLL.  It enables clock deletion to further decrease the system clock.  It
+then waits for an interrupt on a given trigger (the txmask value is provided in
+the first argument to the function), and powers the PLL and DDR back up again.
+
+Due to a problem with the DDR clock floating high when the DDRC is powered down
+(which prevents self-refresh of the DDR and causes data loss), a DDR package
+specific value is written to the EMR register of the DDR to remove the
+termination voltage. This is done in a macro in asm/soc-tz1090/ddr.inc which is
+intended to abstract the suspend code from the DDR package specific code. Only
+code for the bring up board DDR package is currently in ddr.inc.
+
+Comet standby mode does not use the Powerdown Controller (PDC) in the Comet to
+do the power down or power up, because use of individual power domains is not
+implemented in the chip, and the Meta must remain powered for standby mode.
+
+
+Suspend to RAM
+--------------
+
+Comet power management code (soc/tz1090/pm.c) implements suspend to RAM for
+boards which support controlling of the SoC power supplies with the EXT_POWER
+pin, which like standby works using the metag coremem interface (see
+coremem.txt) to copy assembly code into core memory.
+
+The assembly code for suspend just puts the DDR into self refresh like standby,
+powers down the main power island, and waits for a while. This should cause the
+board to power down the SoC including the Meta (for boards that don't support
+this the wait will complete and it will return, and be treated as an error).
+
+Since the PDC is responsible for powering the SoC back up, only PDC interrupts
+can be used to wake (RTC, Infrared, Sys Wakes), and routing of interrupts from
+other peripherals on the SoC to Sys Wake 3 is not possible since there's only
+one power island so the whole SoC except the PDC power domain is powered down.
+
+When the SoC powers back up it boots using the normal Comet boot process,
+therefore prior to suspending the power management code does a setjmp (see
+arch/metag/kernel/suspend.S and arch/metag/include/asm/suspend.h) and stores the
+jump buffer address and the address of a resume function into the PDC soft reset
+protected registers (see arch/metag/soc/tz1090/bootprot.c). When the bootloader
+is loaded soon after wake and reset the DDR will be reconfigured which takes the
+DDR out of self refresh. The bootloader checks the PDC soft reset protected
+registers, and if it needs to resume it simply calls the provided function with
+the provided data in the first argument.
+
+Note: bad things can happen if the bootloader used to boot Linux is different to
+the bootloader used to resume from suspend.
+
+The kernel's resume entry function then sets a few things up and performs a
+longjmp back to the point where setjmp was called, at which point the resume
+process begins.
+
+In summary the core suspend to RAM process looks like this:
+ - setjmp (kernel/suspend.S)
+ - store jump buffer pointer and resume entry function in PDC soft reset
+   protected registers using a certain boot protocol (soc/tz1090/bootprot.c)
+ - jump into suspend function (soc/tz1090/suspend.S) in cache locked lines,
+   which puts DDR into self refresh and powers down the main power domain
+   (EXT_POWER pin)
+ - the board then powers down all of the SoC except the PDC power domain
+ - when the PDC receives a wake interrupt from one of it's wake sources (RTC,
+   Infrared, Syswakes) it signals the board to power the SoC back up again
+   (EXT_POWER pin)
+ - the board powers back up the SoC power supplies and the PDC does a soft reset
+ - the Meta boots normally using the Comet bootrom
+ - secload will initialise the DDR as it loads the LDR of the bootloader. This
+   brings the DDR out of self refresh mode with it's contents intact.
+ - one of the bootloaders reads the PDC soft reset protected registers before
+   loading Linux and jumps to Linux's Comet resume entry function
+ - the resume entry function performs a longjmp to get back to the same stack
+   position and PC as setjmp was called. The MMU is reconfigured and the resume
+   process begins.

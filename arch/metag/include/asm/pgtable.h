@@ -147,12 +147,29 @@
 #define PAGE_NONE	__pgprot(_PAGE_PRESENT | _PAGE_ACCESSED | \
 				 _PAGE_CACHEABLE)
 
+#ifdef CONFIG_SOC_CHORUS2
+/* Workaround older Meta 1.2 silicon bugs. The rules are as follows:
+   - code pages must always be cached to avoid cached and uncached code fetches
+     being mixed.
+   - data pages which are c-o-wed or marked read-only to implement page
+     dirtying must be uncached to avoid short dcache turnaround issue.
+   Luckily these two requirements can both be satisfied at the same time.
+ */
+#define PAGE_SHARED	__pgprot(_PAGE_PRESENT | _PAGE_WRITE | \
+				 _PAGE_ACCESSED)
+#define PAGE_SHARED_C	__pgprot(_PAGE_PRESENT | _PAGE_WRITE | \
+				 _PAGE_ACCESSED | _PAGE_CACHEABLE)
+#define PAGE_COPY	__pgprot(_PAGE_PRESENT | _PAGE_ACCESSED)
+#define PAGE_COPY_C	__pgprot(_PAGE_PRESENT | _PAGE_ACCESSED | \
+				 _PAGE_CACHEABLE)
+#else
 #define PAGE_SHARED	__pgprot(_PAGE_PRESENT | _PAGE_WRITE | \
 				 _PAGE_ACCESSED | _PAGE_CACHEABLE)
 #define PAGE_SHARED_C	PAGE_SHARED
 #define PAGE_COPY	__pgprot(_PAGE_PRESENT | _PAGE_ACCESSED | \
 				 _PAGE_CACHEABLE)
 #define PAGE_COPY_C	PAGE_COPY
+#endif
 
 #define PAGE_READONLY	__pgprot(_PAGE_PRESENT | _PAGE_ACCESSED | \
 				 _PAGE_CACHEABLE)
@@ -197,7 +214,19 @@ extern unsigned long empty_zero_page;
 
 #define pte_pfn(pte)		(pte_val(pte) >> PAGE_SHIFT)
 
+#ifdef CONFIG_SOC_CHORUS2
+extern unsigned long zero_pfn;
+
+static inline pte_t pfn_pte(unsigned long pfn, pgprot_t prot)
+{
+	unsigned long prot_bits = pgprot_val(prot);
+	if (pfn == zero_pfn)
+		prot_bits &= ~(_PAGE_CACHEABLE);
+	return __pte(((pfn) << PAGE_SHIFT) | prot_bits);
+}
+#else
 #define pfn_pte(pfn, prot)	__pte(((pfn) << PAGE_SHIFT) | pgprot_val(prot))
+#endif
 
 #define pte_none(x)		(!pte_val(x))
 #define pte_present(x)		(pte_val(x) & _PAGE_PRESENT)
@@ -222,10 +251,23 @@ static inline int pte_young(pte_t pte)   { return pte_val(pte) & _PAGE_ACCESSED;
 static inline int pte_file(pte_t pte)    { return pte_val(pte) & _PAGE_FILE; }
 static inline int pte_special(pte_t pte) { return 0; }
 
+#ifdef CONFIG_SOC_CHORUS2
+static inline pte_t pte_wrprotect(pte_t pte)
+{
+	if (pte_write(pte))
+		pte_val(pte) &= (~(_PAGE_WRITE | _PAGE_CACHEABLE));
+	return pte;
+}
+#else
 static inline pte_t pte_wrprotect(pte_t pte) { pte_val(pte) &= (~_PAGE_WRITE); return pte; }
+#endif
 static inline pte_t pte_mkclean(pte_t pte)   { pte_val(pte) &= ~_PAGE_DIRTY; return pte; }
 static inline pte_t pte_mkold(pte_t pte)     { pte_val(pte) &= ~_PAGE_ACCESSED; return pte; }
+#ifdef CONFIG_SOC_CHORUS2
+static inline pte_t pte_mkwrite(pte_t pte)   { pte_val(pte) |= (_PAGE_WRITE | _PAGE_CACHEABLE); return pte; }
+#else
 static inline pte_t pte_mkwrite(pte_t pte)   { pte_val(pte) |= _PAGE_WRITE; return pte; }
+#endif
 static inline pte_t pte_mkdirty(pte_t pte)   { pte_val(pte) |= _PAGE_DIRTY; return pte; }
 static inline pte_t pte_mkyoung(pte_t pte)   { pte_val(pte) |= _PAGE_ACCESSED; return pte; }
 static inline pte_t pte_mkspecial(pte_t pte) { return pte; }

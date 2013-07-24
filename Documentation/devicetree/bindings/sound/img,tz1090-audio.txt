@@ -1,0 +1,19 @@
+* Imagination Technologies audio complex for the TZ1090 SoC.
+
+Required properties:
+- compatible         : Must be "img,tz1090-audio".
+- reg                : Register list containing the ADC control register,
+the HP control register and the GTI port for the tansen codec.
+- img,i2s-controller : phandle for the i2s controller.
+- img,audio-codec    : phandle for the tansen codec.
+
+Example:
+
+sound {
+	compatible = "img,tz1090-audio";
+	reg = < 0x020059E0 0x4
+		0x020059E4 0x4
+		0x020059B8 0x4>;
+	img,i2s-controller = <&i2s>;
+	img,audio-codec = <&tansen>;
+};

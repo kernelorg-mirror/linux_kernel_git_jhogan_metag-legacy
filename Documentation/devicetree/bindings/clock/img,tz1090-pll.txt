@@ -1,0 +1,33 @@
+Binding for TZ1090 Phase-Lock Loop (PLL) clocks.
+
+This binding uses the common clock binding[1]. These PLLs are configured with 2
+registers specified with the reg property. These contain various fields which
+among other things specify the reference divider value (r), the frequency
+divider value (f), and the output divider value (od). When enabled, the output
+clock rate is:
+
+    f_out = f_ref / r * (f / 2) / od
+
+[1] Documentation/devicetree/bindings/clock/clock-bindings.txt
+
+Required properties:
+- compatible         : Shall be "img,tz1090-pll".
+- #clock-cells       : From common clock binding; shall be set to 0.
+- reg                : Address of configuration register pair.
+- clocks             : From common clock binding.
+
+Required source clocks:
+- 0                  : Reference clock used to generate the output clock
+                       (doesn't have to be named).
+
+Optional properties:
+- clock-output-names : From common clock binding.
+
+Example:
+	sys_pll {
+		compatible = "img,tz1090-pll";
+		#clock-cells = <0>;
+		clocks = <&sysclk0_sw>;
+		reg = <0x02005950 0x8>;	/* CR_TOP_SYSPLL_CTL{0,1} */
+		clock-output-names = "sys_pll";
+	};

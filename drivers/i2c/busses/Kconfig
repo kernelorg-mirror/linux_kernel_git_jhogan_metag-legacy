@@ -371,6 +371,13 @@ config I2C_CBUS_GPIO
 	  This driver can also be built as a module.  If so, the module
 	  will be called i2c-cbus-gpio.
 
+config I2C_CHORUS2
+	tristate "Chorus2 I2C support"
+	depends on SOC_CHORUS2
+	help
+	  This is the driver for the onboard I2C controller on the Chorus2
+	  SoC. This device is also known as SCB.
+
 config I2C_CPM
 	tristate "Freescale CPM1 or CPM2 (MPC8xx/826x)"
 	depends on (CPM1 || CPM2) && OF_I2C
@@ -463,6 +470,27 @@ config I2C_IBM_IIC
 
 	  This driver can also be built as a module.  If so, the module
 	  will be called i2c-ibm_iic.
+
+config I2C_IMG
+	tristate "IMG I2C (SCB) master interface"
+	depends on HAVE_CLK
+	help
+	  Say Y here if you want to use the I2C (SCB) master interface on
+	  the Imagination Technologies SoCs.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called i2c-img.
+
+config I2C_IMG_DEBUG_BUFFER
+	bool "Record and report detailed interrupt info on fatal errors"
+	depends on I2C_IMG
+	default y
+	help
+	  Say Y here (recommended) if you want I2C (SCB) interrupts for each
+	  transaction to be recorded in a debug buffer so that more detailed
+	  debug information can be printed to the kernel log when a fatal error
+	  such as an SCLK low timeout is encountered. This uses between 1KB-2KB
+	  of memory.
 
 config I2C_IMX
 	tristate "IMX I2C interface"

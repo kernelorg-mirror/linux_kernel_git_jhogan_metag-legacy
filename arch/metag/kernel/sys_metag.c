@@ -41,6 +41,16 @@ asmlinkage long sys_mmap2(unsigned long addr, unsigned long len,
 			  unsigned long prot, unsigned long flags,
 			  unsigned long fd, unsigned long pgoff)
 {
+#ifdef CONFIG_SOC_CHORUS2
+	/*
+	 * To workaround a chip bug on Chorus2 we must make sure we never take a
+	 * code fetch page fault. We lock all non-anonymous executable vmas
+	 * here.
+	 */
+	if (!(flags & MAP_ANONYMOUS) && (prot & PROT_EXEC))
+		flags |= MAP_LOCKED;
+#endif
+
 	/* The shift for mmap2 is constant, regardless of PAGE_SIZE setting. */
 	if (pgoff & ((1 << (PAGE_SHIFT - 12)) - 1))
 		return -EINVAL;
@@ -169,6 +179,13 @@ asmlinkage long sys_sync_file_range_metag(int fd, unsigned long offs_lo,
 #define sys_pread64		sys_pread64_metag
 #define sys_pwrite64		sys_pwrite64_metag
 #define sys_sync_file_range	sys_sync_file_range_metag
+
+/*
+ * Chorus2 needs some workarounds
+ */
+#ifdef CONFIG_SOC_CHORUS2
+#define sys_execve		sys_execve_chorus2
+#endif
 
 /*
  * Note that we can't include <linux/unistd.h> here since the header

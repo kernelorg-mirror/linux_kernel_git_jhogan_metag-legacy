@@ -39,6 +39,8 @@ metronomefb.txt
 	- info on the driver for the Metronome display controller.
 modedb.txt
 	- info on the video mode database.
+pdpfb.txt
+	- info on the ImgTec PDP frame buffer driver.
 pvr2fb.txt
 	- info on the PowerVR 2 frame buffer driver.
 pxafb.txt

@@ -1,4 +1,10 @@
 00-INDEX
 	- this file
+cachepart.txt
+	- Documents the Meta cache partition manipulation interface
+coremem.txt
+	- Documents the core memory interface used by suspend code
 kernel-ABI.txt
 	- Documents metag ABI details
+tz1090/
+	- Documentation specific to the TZ1090 (Comet) SoC

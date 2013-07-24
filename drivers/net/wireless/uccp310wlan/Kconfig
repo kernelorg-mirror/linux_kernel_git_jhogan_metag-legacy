@@ -1,0 +1,16 @@
+config UCCP310WLAN
+	tristate "ImgTec Universal Communications Core Platform (UCCP310) WLAN"
+	depends on SOC_TZ1090
+	depends on MAC80211
+	help
+	  Select to build the driver supporting ImgTec Universal Communications
+	  Core Platform (UCCP310) WLAN.
+
+	  If you select to build as a module it will be called uccp310wlan.
+
+config UCCP310WLAN_DEBUG
+	bool "Debugging messages"
+	depends on UCCP310WLAN
+	help
+	  Select this option to build the UCCP310 WLAN driver with debugging
+	  messages.

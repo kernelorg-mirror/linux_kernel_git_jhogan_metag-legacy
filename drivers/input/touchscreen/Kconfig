@@ -790,6 +790,11 @@ config TOUCHSCREEN_USB_EASYTOUCH
 	  Say Y here if you have an EasyTouch USB Touch controller.
 	  If unsure, say N.
 
+config TOUCHSCREEN_USB_LILLIPUT
+	default y
+	bool "Lilliput VGA/HDMI monitor touchscreen support" if EMBEDDED
+	depends on TOUCHSCREEN_USB_COMPOSITE
+
 config TOUCHSCREEN_TOUCHIT213
 	tristate "Sahara TouchIT-213 touchscreen"
 	select SERIO
@@ -853,6 +858,15 @@ config TOUCHSCREEN_PCAP
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called pcap_ts.
+
+config TOUCHSCREEN_QT5480
+	tristate "QT5480 touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have a QT5480 I2C touchscreen.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called ts_qt5480.
 
 config TOUCHSCREEN_ST1232
 	tristate "Sitronix ST1232 touchscreen controllers"

@@ -1,0 +1,280 @@
+/*
+ * tz1090-i2s.h
+ *
+ */
+#ifndef TZ1090I2S_H_
+#define TZ1090I2S_H_
+
+#include <linux/io.h>
+#include "tz1090-pcm.h"
+#include <asm/soc-tz1090/defs.h>
+
+struct tz1090_i2s {
+	struct snd_soc_dai_driver dai;
+	void __iomem *audio_out;
+	void __iomem *audio_in;
+	int periph_out;
+	int periph_in;
+	struct comet_pcm_dma_params stereo_out;
+	struct comet_pcm_dma_params stereo_in;
+};
+/*Helper Macros (dont use outside of this file) */
+#define _REG_ADDRESS(REG) _##REG##_OFFSET
+#define _REG_MASK(REG) _##REG##_MASK
+#define _REG_SHIFT(REG) _##REG##_SHIFT
+
+/**************************** I2S OUT *****************************************/
+
+#define _I2S_OUT_INTERLEAVE_DATA_OFFSET 0x00
+
+#define	_I2S_OUT_CONTROL_OFFSET		0x04
+
+#define _I2S_OUT_ACTIVE_CHAN_OFFSET	_I2S_OUT_CONTROL_OFFSET
+#define _I2S_OUT_ACTIVE_CHAN_SHIFT	13
+#define _I2S_OUT_ACTIVE_CHAN_MASK	0x0001E000
+
+#define _I2S_OUT_CLOCK_SELECT_OFFSET	_I2S_OUT_CONTROL_OFFSET
+#define _I2S_OUT_CLOCK_SELECT_SHIFT	12
+#define _I2S_OUT_CLOCK_SELECT_MASK	0x00001000
+
+#define _I2S_OUT_FRAME_OFFSET		_I2S_OUT_CONTROL_OFFSET
+#define _I2S_OUT_FRAME_SHIFT		7
+#define _I2S_OUT_FRAME_MASK		0x00000180
+
+#define _I2S_OUT_MASTER_OFFSET		_I2S_OUT_CONTROL_OFFSET
+#define _I2S_OUT_MASTER_SHIFT		6
+#define _I2S_OUT_MASTER_MASK		0x00000040
+
+#define _I2S_OUT_ACLK_SEL_OFFSET	_I2S_OUT_CONTROL_OFFSET
+#define _I2S_OUT_ACLK_SEL_SHIFT		5
+#define _I2S_OUT_ACLK_SEL_MASK		0x00000020
+
+#define _I2S_OUT_BCLK_EN_OFFSET		_I2S_OUT_CONTROL_OFFSET
+#define _I2S_OUT_BCLK_EN_SHIFT		4
+#define _I2S_OUT_BCLK_EN_MASK		0x00000010
+
+#define _I2S_OUT_LEFT_POL_OFFSET	_I2S_OUT_CONTROL_OFFSET
+#define _I2S_OUT_LEFT_POL_SHIFT		3
+#define _I2S_OUT_LEFT_POL_MASK		0x00000008
+
+#define _I2S_OUT_BCLK_POL_OFFSET	_I2S_OUT_CONTROL_OFFSET
+#define _I2S_OUT_BCLK_POL_SHIFT		2
+#define _I2S_OUT_BCLK_POL_MASK		0x00000004
+
+#define _I2S_OUT_PACKED_OFFSET		_I2S_OUT_CONTROL_OFFSET
+#define _I2S_OUT_PACKED_SHIFT		1
+#define _I2S_OUT_PACKED_MASK		0x00000002
+
+#define _I2S_OUT_ENABLE_OFFSET		_I2S_OUT_CONTROL_OFFSET
+#define _I2S_OUT_ENABLE_SHIFT		0
+#define _I2S_OUT_ENABLE_MASK		0x00000001
+
+#define _I2S_OUT_SOFT_RESET_OFFSET	0x08
+#define _I2S_OUT_SOFT_RESET_SHIFT	0
+#define _I2S_OUT_SOFT_RESET_MASK	0x00000001
+
+#define _I2S_OUT_CHANS_OFFSET		0x80
+#define _I2S_OUT_CHANS_STRIDE		0x20
+
+#define _I2S_OUT_CHAN_DATA_OFFSET	0x00
+
+#define _I2S_OUT_CHAN_CTRL_OFFSET	0x04
+
+#define _I2S_OUT_CHAN_LRDATA_POL_OFFSET	_I2S_OUT_CHAN_CTRL_OFFSET
+#define _I2S_OUT_CHAN_LRDATA_POL_SHIFT	12
+#define _I2S_OUT_CHAN_LRDATA_POL_MASK	0x00001000
+
+#define _I2S_OUT_CHAN_LRFORCE_DIS_OFFSET _I2S_OUT_CHAN_CTRL_OFFSET
+#define _I2S_OUT_CHAN_LRFORCE_DIS_SHIFT	11
+#define _I2S_OUT_CHAN_LRFORCE_DIS_MASK	0x00000800
+
+#define _I2S_OUT_CHAN_LOCK_DIS_OFFSET	_I2S_OUT_CHAN_CTRL_OFFSET
+#define _I2S_OUT_CHAN_LOCK_DIS_SHIFT	10
+#define _I2S_OUT_CHAN_LOCK_DIS_MASK	0x00000400
+
+#define _I2S_OUT_CHAN_REPEAT_OFFSET	_I2S_OUT_CHAN_CTRL_OFFSET
+#define _I2S_OUT_CHAN_REPEAT_SHIFT	9
+#define _I2S_OUT_CHAN_REPEAT_MASK	0x00000200
+
+#define _I2S_OUT_CHAN_PACKED_OFFSET	_I2S_OUT_CHAN_CTRL_OFFSET
+#define _I2S_OUT_CHAN_PACKED_SHIFT	8
+#define _I2S_OUT_CHAN_PACKED_MASK	0x00000100
+
+#define _I2S_OUT_CHAN_FORMAT_OFFSET	_I2S_OUT_CHAN_CTRL_OFFSET
+#define _I2S_OUT_CHAN_FORMAT_SHIFT	4
+#define _I2S_OUT_CHAN_FORMAT_MASK	0x000000F0
+
+#define _I2S_OUT_CHAN_MUSTBE1_OFFSET	_I2S_OUT_CHAN_CTRL_OFFSET
+#define _I2S_OUT_CHAN_MUSTB1_SHIFT	3
+#define _I2S_OUT_CHAN_MUSTB1_MASK	0x00000008
+
+#define _I2S_OUT_CHAN_FLUSH_OFFSET	_I2S_OUT_CHAN_CTRL_OFFSET
+#define _I2S_OUT_CHAN_FLUSH_SHIFT	2
+#define _I2S_OUT_CHAN_FLUSH_MASK	0x00000004
+
+#define _I2S_OUT_CHAN_PH_NSY_OFFSET	_I2S_OUT_CHAN_CTRL_OFFSET
+#define _I2S_OUT_CHAN_PH_NSY_SHIFT	1
+#define _I2S_OUT_CHAN_PH_NSY_MASK	0x00000002
+
+#define _I2S_OUT_CHAN_RUN_OFFSET	_I2S_OUT_CHAN_CTRL_OFFSET
+#define _I2S_OUT_CHAN_RUN_SHIFT		0
+#define _I2S_OUT_CHAN_RUN_MASK		0x00000001
+
+#define _I2S_OUT_SOFT_RESET_OFFSET		0x08
+
+#define _I2S_OUT_CHAN_I_STATUS_OFFSET	0x08
+
+#define _I2S_OUT_CHAN_I_ENABLE_OFFSET	0x0C
+
+#define _I2S_OUT_CHAN_I_CLEAR_OFFSET	0x10
+
+#define _I2S_OUT_SAMPLE_COUNT_OFFSET 	0x1C
+
+/* Helper to be used externally */
+#define I2S_OUT_WRITE_REG(base, REG, value)	\
+	iowrite32(value, (base)->audio_out + _REG_ADDRESS(REG))
+
+#define I2S_OUT_SET_REG_FIELD(base, REG, value) \
+{\
+	u32 temp = ioread32((base)->audio_out + _REG_ADDRESS(REG)); \
+	I2S_OUT_SET_FIELD(temp, REG, value); \
+	iowrite32(temp, (base)->audio_out + _REG_ADDRESS(REG)); \
+}
+
+#define I2S_OUT_SET_FIELD(data, FIELD, value) \
+{\
+	data &= ~_REG_MASK(FIELD);\
+	data |=  value << _REG_SHIFT(FIELD);\
+}
+
+static inline void I2S_OUT_RSET_CHAN_CONTROL(struct tz1090_i2s *base,
+					     int channel,
+					     u32 value)
+{
+	iowrite32(value, base->audio_out + _I2S_OUT_CHANS_OFFSET +
+			channel * _I2S_OUT_CHANS_STRIDE +
+			_REG_ADDRESS(I2S_OUT_CHAN_CTRL));
+}
+
+static inline u32 I2S_OUT_RGET_CHAN_CONTROL(struct tz1090_i2s *base,
+					    int channel)
+{
+	return ioread32(base->audio_out + _I2S_OUT_CHANS_OFFSET +
+			channel * _I2S_OUT_CHANS_STRIDE +
+			_REG_ADDRESS(I2S_OUT_CHAN_CTRL));
+}
+static inline void I2S_OUT_RSET_MAIN_CONTROL(struct tz1090_i2s *base,
+					     u32 value)
+{
+	iowrite32(value, base->audio_out + _REG_ADDRESS(I2S_OUT_CONTROL));
+}
+
+static inline u32 I2S_OUT_RGET_MAIN_CONTROL(struct tz1090_i2s *base)
+{
+	return ioread32(base->audio_out + _REG_ADDRESS(I2S_OUT_CONTROL));
+}
+
+/********************************** I2S IN ************************************/
+#define _I2S_IN_DATA_OFFSET		0x00
+
+#define _I2S_IN_CONTROL_OFFSET		0x04
+
+#define _I2S_IN_RJUST_OFFSET		_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_RJUST_SHIFT		18
+#define _I2S_IN_RJUST_MASK		0x00040000
+
+#define _I2S_IN_CCDEL_OFFSET		_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_CCDEL_SHIFT		15
+#define _I2S_IN_CCDEL_MASK		0x00038000
+
+#define _I2S_IN_FEN_OFFSET		_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_FEN_SHIFT		14
+#define _I2S_IN_FEN_MASK		0x00004000
+
+#define _I2S_IN_FMODE_OFFSET		_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_FMODE_SHIFT		13
+#define _I2S_IN_FMODE_MASK		0x00002000
+
+#define _I2S_IN_FRAME_PACK_OFFSET	_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_FRAME_PACK_SHIFT	12
+#define _I2S_IN_FRAME_PACK_MASK		0x00001000
+
+#define _I2S_IN_LR_DATA_POL_OFFSET	_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_LR_DATA_POL_SHIFT	11
+#define _I2S_IN_LR_DATA_POL_MASK	0x00000800
+
+#define _I2S_IN_ALIGN_OFFSET		_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_ALIGN_SHIFT		10
+#define _I2S_IN_ALIGN_MASK		0x00000400
+
+#define _I2S_IN_PACKH_OFFSET		_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_PACKH_SHIFT		9
+#define _I2S_IN_PACKH_MASK		0x00000200
+
+#define _I2S_IN_LRDLY_OFFSET		_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_LRDLY_SHIFT		8
+#define _I2S_IN_LRDLY_MASK		0x00000100
+
+#define _I2S_IN_BCLKPOL_OFFSET		_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_BCLKPOL_SHIFT		7
+#define _I2S_IN_BCLKPOL_MASK		0x00000080
+
+#define _I2S_IN_FLUSHFIFO_OFFSET	_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_FLUSHFIFO_SHIFT		6
+#define _I2S_IN_FLUSHFIFO_MASK		0x00000040
+
+#define _I2S_IN_BOC_OFFSET		_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_BOC_SHIFT		5
+#define _I2S_IN_BOC_MASK		0x00000020
+
+#define _I2S_IN_CET_OFFSET		_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_CET_SHIFT		4
+#define _I2S_IN_CET_MASK		0x00000010
+
+#define _I2S_IN_LRD_OFFSET		_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_LRD_SHIFT		3
+#define _I2S_IN_LRD_MASK		0x00000008
+
+#define _I2S_IN_FRAME_WIDTH_OFFSET	_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_FRAME_WIDTH_SHIFT	2
+#define _I2S_IN_FRAME_WIDTH_MASK	0x00000004
+
+#define _I2S_IN_SAMPLE_WIDTH_OFFSET	_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_SAMPLE_WIDTH_SHIFT	1
+#define _I2S_IN_SAMPLE_WIDTH_MASK	0x00000002
+
+#define _I2S_IN_ENABLE_OFFSET		_I2S_IN_CONTROL_OFFSET
+#define _I2S_IN_ENABLE_SHIFT		0
+#define _I2S_IN_ENABLE_MASK		0x00000001
+
+#define _I2S_IN_STATUS_OFFSET		0x08
+
+#define _I2S_IN_INT_EN_OFFSET		0x0c
+
+#define _I2S_IN_SAMPLE_CNT_OFFSET	0x10
+
+#define _I2S_IN_SOFT_REST_OFFSET	0x14
+
+#define _I2S_IN_REVISON_OFFSET		0x1c
+
+/* Helper to be used externally */
+#define I2S_IN_SET_FIELD(data, FIELD, value) \
+{\
+	data &= ~_REG_MASK(FIELD);\
+	data |=  value << _REG_SHIFT(FIELD);\
+}
+
+
+
+static inline void I2S_IN_RSET_CONTROL(struct tz1090_i2s *base,
+				       u32 value)
+{
+	iowrite32(value, base->audio_in + _REG_ADDRESS(I2S_IN_CONTROL));
+}
+
+static inline u32 I2S_IN_RGET_CONTROL(struct tz1090_i2s *base)
+{
+	return ioread32(base->audio_in + _REG_ADDRESS(I2S_IN_CONTROL));
+}
+
+#endif /* TZ1090I2S_H_ */

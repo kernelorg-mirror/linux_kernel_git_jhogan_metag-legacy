@@ -5,11 +5,17 @@
 #ifndef _LINUX_IRQCHIP_METAG_EXT_H_
 #define _LINUX_IRQCHIP_METAG_EXT_H_
 
+#include <linux/compiler.h>
+
 struct irq_data;
 struct platform_device;
 
 /* called from core irq code at init */
 int init_external_IRQ(void);
+
+/* DEPRECATED use devicetree instead */
+/* map an external IRQ to a virtual IRQ number */
+int __deprecated external_irq_map(unsigned int hw);
 
 /*
  * called from SoC init_irq() callback to dynamically indicate the lack of

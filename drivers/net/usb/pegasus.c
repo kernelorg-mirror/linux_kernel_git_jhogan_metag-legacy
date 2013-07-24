@@ -463,6 +463,10 @@ static void read_bulk_callback(struct urb *urb)
 		/* FIXME schedule work to clear the halt */
 		netif_warn(pegasus, rx_err, net, "no rx stall recovery\n");
 		return;
+	case -EOVERFLOW:
+	case -EPROTO:
+	case -EILSEQ:
+		pegasus->stats.rx_errors++;
 	case -ENOENT:
 	case -ECONNRESET:
 	case -ESHUTDOWN:
@@ -632,6 +636,7 @@ static void intr_callback(struct urb *urb)
 	switch (status) {
 	case 0:
 		break;
+	case -EOVERFLOW:
 	case -ECONNRESET:	/* unlink */
 	case -ENOENT:
 	case -ESHUTDOWN:

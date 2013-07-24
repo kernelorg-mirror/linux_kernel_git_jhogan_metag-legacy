@@ -1,0 +1,383 @@
+
+
+pdpfb - fbdev driver for PDP in ImgTec's system on chips
+========================================================
+
+
+Supported Hardware
+==================
+
+	System on Chips from Imagination Technologies
+	* Chorus 2 (PDP 1.0.0)
+	* Comet (PDP 1.0.1)
+
+
+Supported Features
+==================
+
+	Graphics plane framebuffer
+	* 8bit colour indexed mode
+	* 8bit grayscale mode
+	* 16bit RGB 565 mode
+	* 16bit ARGB 4444 mode
+	* 16bit ARGB 1555 mode
+	* 24bit RGB 888 mode (PDP 1.0.1)
+	* 32bit ARGB 8888 mode (PDP 1.0.1)
+	* panning in both directions (horizontally in steps)
+	* pixel and line doubling and halving (using PDP_SETGEOM ioctl)
+
+	Video plane framebuffer (optional)
+	* 12bit 4:2:0 planar mode (see PDPIO_GETPLANAR ioctl)
+	* 12bit 4:2:0 interleaved planar YUV (PDP 1.0.1)
+	* 16bit 4:2:2 UY0VY1 8888 mode
+	* 16bit 4:2:2 VY0UY1 8888 mode
+	* 16bit 4:2:2 Y0UY1V 8888 mode
+	* 16bit 4:2:2 Y0VY1U 8888 mode
+	* panning in both directions (in small steps)
+	* scaling as supported by hardware (using PDP_SETGEOM ioctl)
+	* adjustment of YUV plane offsets and strides (for planar mode)
+	* adjustment of colour space conversion coefficients
+
+	General
+	* background colour
+	* plane enabling and disabling
+	* plane rearranging and positioning
+	* plane blending
+	* plane colour keying
+
+Missing Features
+================
+
+	General
+	* Hardware gamma correction (PDP 1.0.1)
+	* Hardware acceleration using 2D unit (Comet)
+	* Hardware cursor (PDP 1.0.1)
+
+	Video plane framebuffer
+	* 16bit 4:2:0 T88CP tiled mode (PDP 1.0.0 only)
+	* 16bit 4:2:2 T88CP tiled mode (PDP 1.0.0 only)
+
+
+Known Problems
+==============
+
+	* Timing data provided by FBIOGET_VSCREENINFO not accurate when plane
+	  is partially off the screen.
+
+
+Video Framebuffer
+=================
+
+	To set the pixel format of the video framebuffer, set the nonstd field
+	in struct fb_var_screeninfo to one of the PDP_VID_PIXFMT_ constants
+	specified in <video/pdpfb.h>:
+	* PDP_VID_PIXFMT_420_PL8
+		12bit 4:2:0 planar mode
+	* PDP_VID_PIXFMT_420_PL8IVU
+		12bit 4:2:0 planar with byte interleaved chroma
+		V occupies the least significant bits
+	* PDP_VID_PIXFMT_420_PL8IUV
+		12bit 4:2:0 planar with byte interleaved chroma
+		U occupies the least significant bits
+	* PDP_VID_PIXFMT_422_UY0VY1_8888
+		16bit 4:2:2 UY0VY1 8888 mode
+		U occupies the least significant bits
+	* PDP_VID_PIXFMT_422_VY0UY1_8888
+		16bit 4:2:2 VY0UY1 8888 mode
+		V occupies the least significant bits
+	* PDP_VID_PIXFMT_422_Y0UY1V_8888
+		16bit 4:2:2 Y0UY1V 8888 mode
+		Y0 occupies the least significant bits
+	* PDP_VID_PIXFMT_422_Y0VY1U_8888
+		16bit 4:2:2 Y0VY1U 8888 mode
+		Y0 occupies the least significant bits
+
+	Planar pixel format offsets are found using the PDPIO_GETPLANAR ioctl.
+	See also PDPIO_SETCSC ioctl for configuring colour space conversion.
+
+
+Configuration
+=============
+
+	For the PDP driver to be used, the screen may need to be enabled
+	(usually found in Processor type and features -> Board support).
+
+	Kernel config options (found in Device Drivers -> Graphics support ->
+	Support for framebuffer devices).
+	* FB_PDP
+		Enables the PDP framebuffer driver.
+	* FB_PDP_GFX_VIDEOMEM
+		Size of graphics framebuffer in bytes.
+	* FB_PDP_GFX_FIX_NATIVE_RES
+		Forces the graphics framebuffer to always be at the native
+		screen resolution. This can be useful in preventing programs
+		from setting an inappropriate resolution and thinking that it
+		fills the screen.
+	* FB_PDP_VID
+		Enable the video plane framebuffer device. This framebuffer can
+		be positioned on top of the main framebuffer and supports YUV
+		pixel formats.
+	* FB_PDP_VID_VIDEOMEM
+		Size of video framebuffer in bytes
+	* FB_PDP_USERMEM
+		Allows userland code to provide framebuffer memory.
+
+
+Module Parameters
+=================
+
+	Physical memory regions can be provided to the driver using module
+	parameters. This allows video memory to be set aside by the bootloader
+	which might be either too large for linux to allocate, or in some fast
+	internal memory.
+
+	These parameters can be provided in the kernel command line:
+	* pdpfb.videomem_base
+	* pdpfb.videomem_len
+		Physical base address and length of a region of memory for use
+		by both graphics and video planes if they don't have their own
+		dedicated memory available. This overrides any memory
+		ioresources of type PDPFB_IORES_MEM (see below).
+	* pdpfb.gfx_videomem_base
+	* pdpfb.gfx_videomem_len
+		[Base and] length of graphics plane video memory. The length
+		defaults to the kernel config option FB_PDP_GFX_VIDEOMEM. The
+		base is ignored on SoCs which have a shared base pointer and
+		overrides any memory ioresources of type PDPFB_IORES_GFXMEM
+		(see below).
+	* pdpfb.vid_videomem_base
+	* pdpfb.vid_videomem_len
+		[Base and] length of video plane video memory. The length
+		defaults to the kernel config option FB_PDP_VID_VIDEOMEM. The
+		base is ignored on SoCs which have a shared base pointer and
+		overrides any memory ioresources of type PDPFB_IORES_VIDMEM
+		(see below).
+
+
+Platform Data
+=============
+
+	Physical memory regions can be provided to the driver using resources
+	in platform data. This allows video memory to be set aside by the
+	bootloader which might be either too large for linux to allocate, or in
+	some fast internal memory.
+
+	Use the flags in <video/pdpfb.h> to specify the memory types:
+	* IORESOURCE_MEM | PDPFB_IORES_MEM
+		A region of memory for use by both graphics and video planes if
+		they don't have their own dedicated memory available (see
+		above).
+	* IORESOURCE_MEM | PDPFB_IORES_GFXMEM
+		A region of memory for use by graphics planes only. Don't use
+		on SoCs which have a shared base pointer.
+	* IORESOURCE_MEM | PDPFB_IORES_VIDMEM
+		A region of memory for use by video planes only. Don't use on
+		SoCs which have a shared base pointer.
+	If dedicated memory for a plane cannot be found in the regions
+	specified by platform data, kernel memory is allocated instead.
+
+
+Ioctl Interface
+===============
+
+#include <video/pdpfb.h>
+
+The following ioctls can be used with all PDP framebuffer devices.
+
+* FBIOGET_VBLANK
+	Takes a pointer to a struct fb_vblank.
+
+	Gets some information about the current scan line position.
+
+	The following are supported (the flags field should be checked
+	programatically before using these):
+	* Vertical blank status (FB_VBLANK_VBLANKING)
+	* Vertical sync status (FB_VBLANK_VSYNCING)
+	* Vertical sync count (count)
+	* Line number (vcount)
+
+* FBIO_WAITFORVSYNC
+	Takes a pointer to a display number (must be 0).
+
+	Waits until the start of the next vertical sync on the specified
+	display before returning.
+
+* PDPIO_GETBGND
+* PDPIO_SETBGND
+	Takes a pointer to a 32bit unsigned integer.
+
+	Gets or sets the background colour in RGB888 format.
+
+* PDPIO_GETSCRGEOM
+	Takes a pointer to a struct pdpfb_geom.
+
+	Gets the geometry of the screen in the coordinate space of the
+	PDPIO_GETGEOM and PDPIO_SETGEOM ioctls below.
+
+* PDPIO_SETUSERMEM
+	Takes a pointer to a struct pdpfb_usermem.
+
+	Only available when CONFIG_FB_PDP_USERMEM is enabled.
+
+	Attempts to allocate framebuffers using user-provided memory. The
+	phys & len fields of the struct describe the memory to use, and
+	the flags field consists of one of more of the following flags:
+
+	* PDP_USERMEM_ALLPLANES
+	  When set, the provided memory will be used to allocate framebuffers
+	  for all planes. Otherwise, only the plane corresponding to the
+	  opened framebuffer device will be affected. Note that on systems
+	  where planes share a base pointer it is only valid to affect all
+	  planes (ie. to set this flag).
+
+	If allocation from user memory fails, planes will be reallocated
+	from non-user-provided memory. Either way, note that any previous
+	mappings of the framebuffer will now be invalid.
+
+
+The following ioctls can be used with all PDP framebuffer devices but apply
+specifically to the one you use it with.
+
+* PDPIO_GETEN
+* PDPIO_SETEN
+	Takes a pointer to an integer.
+
+	Gets or sets whether the plane of the chosen framebuffer is enabled
+	or not.
+
+* PDPIO_GETPLANEPOS
+* PDPIO_SETPLANEPOS
+	Takes a pointer to an integer.
+
+	Gets or sets the planes position in relation to other planes, where
+	higher values are on top of other planes and lower values are below
+	other planes. For example set the video framebuffer's PLANEPOS to 0
+	to move it below the graphics plane so that the graphics plane's new
+	PLANEPOS is changed to 1.
+
+* PDPIO_GETGEOM
+* PDPIO_SETGEOM
+	Takes a pointer to a struct pdpfb_geom.
+
+	Gets or sets the screen position and size of the plane.
+	A width and height of 0 indicates that no scaling takes place, and
+	the plane's size will be the framebuffer's xres and yres.
+	Some PDPs only support arbitrary scaling horizontally on the video
+	plane. Other scale values will snap to doubling or halving.
+
+* PDPIO_GETCKEYMODE
+* PDPIO_SETCKEYMODE
+	Takes a pointer to an unsigned integer.
+
+	Gets or sets the colour key mode:
+	* PDP_CKEYMODE_DISABLE
+		Do not perform colour keying on this plane.
+	* PDP_CKEYMODE_PREVIOUS
+		Compare the masked bits of the previous plane with the colour
+		key and display previous plane colour if they match.
+	* PDP_CKEYMODE_CURRENT
+		Compare the masked bits of the current plane with the colour
+		key and display previous plane colour if they match.
+
+* PDPIO_GETCKEY
+* PDPIO_SETCKEY
+	Takes a pointer to a struct pdpfb_ckey.
+
+	Gets or sets the colour key and the colour key mask of the plane in
+	RGB888 format.
+	When colour keying is in use, a colour specified by the colour key
+	mode is compared with the colour key, and if all the masked bits match
+	then the previous plane colour is used instead.
+
+* PDPIO_GETBLENDMODE
+* PDPIO_SETBLENDMODE
+	Takes a pointer to an unsigned integer.
+
+	Gets or sets the blend mode of the plane:
+	* PDP_BLENDMODE_NOALPHA
+		No blending takes place with the previous plane.
+	* PDP_BLENDMODE_INVERT
+		Blending takes place using each pixel's alpha.
+		This behaves the same as PDP_BLENDMODE_PIXEL except that an
+		alpha other than all 0's or all 1's inverts the previous colour.
+	* PDP_BLENDMODE_GLOBAL
+		Blending takes place using the global alpha value.
+	* PDP_BLENDMODE_PIXEL
+		Blending takes place using each pixel's alpha.
+		For single bit alpha pixel formats, pixels with alpha of 0 use
+		the global alpha value, and pixels with alpha of 1 are opaque.
+
+* PDPIO_GETGALPHA
+* PDPIO_SETGALPHA
+	Takes a pointer to an unsigned integer.
+
+	Gets or sets the global alpha value of a plane in the range 0-255.
+	The blend mode must be set to PDP_BLENDMODE_GLOBAL for this value to
+	take effect.
+
+
+The following ioctls are specific to PDP video plane framebuffers.
+
+* PDPIO_GETCSC
+* PDPIO_SETCSC
+	Takes a pointer to a struct pdpfb_vid_csc.
+
+	Gets or sets YUV to RGB colour space conversion settings.
+	The colour space conversion coefficients should be in the range
+	-1024 to 1023, and are used as follows:
+		R = (ry*(Y-16)/64 + rv*(V-128)/64 + ru*(U-128)/64) / 4
+		G = (gy*(Y-16)/64 + gv*(V-128)/64 + gu*(U-128)/64) / 4
+		B = (by*(Y-16)/64 + bv*(V-128)/64 + bu*(U-128)/64) / 4
+
+	The following preset coefficients are available. When setting,
+	the structure will be filled with the new coefficients.
+	* PDP_VID_CSCPRESET_HDTV
+		ITU-R BT709 (1990)
+		MPEG2 format 0,1
+	* PDP_VID_CSCPRESET_SDTV (default)
+		ITU-R BT601
+		ITU-R BT624-4 Sys BG
+		ITU-R BT470-2 Sys BG
+		SMPTE 170M
+		MPEG2 format 2,3,5,6
+	* PDP_VID_CSCPRESET_LEGACYHDTV
+		SMPTE 240M (1987)
+		MPEG2 format 7
+	* PDP_VID_CSCPRESET_LEGACYSDTV
+		FCC
+		ITU-R BT624-4 Sys M
+		ITU-R BT470-2 Sys M
+		MPEG2 format 4
+
+	You can also specify whether chroma samples are co-sited with luma as
+	opposed to horizontally offset, by setting the cosited field.
+
+	PDPIO_SETCSC errors:
+	EINVAL	Preset code was unrecognised, or was set to 0 (custom)
+		and one or more of the coefficients was out of range.
+
+* PDPIO_GETPLANAR
+* PDPIO_SETPLANAR
+	Takes a pointer to a struct pdpfb_vid_planar.
+
+	Gets or sets the YUV plane arrangement in the framebuffer memory.
+
+	If you use PDPIO_SETPLANAR, the overridden offsets and strides will
+	apply until the next change of pixel format or virtual resolution.
+
+	If the PDPIO_SETPLANAR ioctl fails, fields in the pdpfb_vid_planar
+	struct may have been altered to give an indiciation what was invalid.
+	Be sure to rewrite them before trying again.
+
+	PDPIO_SETPLANAR errors:
+	ENOMEM	The planes do not fit in the video memory.
+	EINVAL	Pixel format isn't a planar pixel format.
+	EINVAL	Offsets or strides do not conform to hardware restrictions.
+		Y offset must be 16 byte aligned, U and V offsets must be 8 or
+		16 byte aligned on Comet or Chorus2 respectively, Y line length
+		must be 16 byte aligned, and U and V line lengths must be equal
+		to or half of the Y line length.
+
+
+--
+James Hogan <james.hogan@imgtec.com>

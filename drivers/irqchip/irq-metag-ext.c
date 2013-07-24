@@ -10,6 +10,7 @@
  * meta_intc_irq_demux().
  */
 
+#include <linux/export.h>
 #include <linux/interrupt.h>
 #include <linux/irqchip/metag-ext.h>
 #include <linux/irqdomain.h>
@@ -557,6 +558,25 @@ struct irq_chip meta_intc_level_chip = {
 };
 
 /**
+ * external_irq_map() - Map an external SoC IRQ to a virtual IRQ number.
+ * @hw:		Number of the external IRQ.
+ *
+ * This function is DEPRECATED. Use device tree instead.
+ *
+ * Returns:	The virtual IRQ number of the external IRQ specified by @hw.
+ */
+int external_irq_map(unsigned int hw)
+{
+	struct meta_intc_priv *priv = &meta_intc_priv;
+	if (!priv->domain)
+		return -ENODEV;
+	if (hw > priv->nr_banks*32)
+		return -EINVAL;
+	return irq_create_mapping(priv->domain, hw);
+}
+EXPORT_SYMBOL_GPL(external_irq_map);
+
+/**
  * meta_intc_map() - map an external irq
  * @d:		irq domain of external trigger block
  * @irq:	virtual irq number
@@ -816,7 +836,10 @@ int __init init_external_IRQ(void)
 	struct device_node *node;
 	int ret, cpu;
 	u32 val;
+	u32 vals[4];
 	bool no_masks = false;
+	unsigned int i;
+	void __iomem *level_addr;
 
 	node = of_find_compatible_node(NULL, NULL, "img,meta-intc");
 	if (!node)
@@ -837,6 +860,25 @@ int __init init_external_IRQ(void)
 	/* Are any mask registers present? */
 	if (of_get_property(node, "no-mask", NULL))
 		no_masks = true;
+
+	/* Are any default edge/level senses available? */
+	ret = of_property_read_u32_array(node, "default-level", vals,
+					 priv->nr_banks);
+	if (!ret) {
+		/* valid, set HWLEVELEXT registers */
+		level_addr = (void __iomem *)HWLEVELEXT;
+		for (i = 0; i < priv->nr_banks; ++i,
+						level_addr += HWSTAT_STRIDE) {
+			metag_out32(vals[i], level_addr);
+#ifdef CONFIG_METAG_SUSPEND_MEM
+			priv->levels_altered[i] = 0xffffffff;
+#endif
+		}
+	} else if (ret != -EINVAL) {
+		/* invalid (rather than simply omitted) */
+		pr_err("meta-intc: default-level could not be read\n");
+		return ret;
+	}
 
 	/* No HWMASKEXT registers present? */
 	if (no_masks)

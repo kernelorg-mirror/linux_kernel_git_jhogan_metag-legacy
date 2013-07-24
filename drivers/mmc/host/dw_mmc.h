@@ -90,6 +90,8 @@
 #define SDMMC_CTYPE_8BIT		BIT(16)
 #define SDMMC_CTYPE_4BIT		BIT(0)
 #define SDMMC_CTYPE_1BIT		0
+/* Status register defines */
+#define SDMMC_STATUS_DATA_BUSY		BIT(9)
 /* Interrupt status & mask register defines */
 #define SDMMC_INT_SDIO(n)		BIT(16 + (n))
 #define SDMMC_INT_EBE			BIT(15)

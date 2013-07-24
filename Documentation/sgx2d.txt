@@ -1,0 +1,99 @@
+
+
+sgx2d - char driver for ImgTec's PowerVR SGX 2D block
+=====================================================
+
+This driver creates a device node (/dev/sgx2d) which allows a userland SGX 2D
+driver (e.g. in DirectFB) to access the SGX 2D slave port and associated
+registers.
+
+
+Configuration
+=============
+
+	Kernel config options (found in Device Drivers -> Character Devices).
+	* IMG_SGX2D
+		Enables the SGX2D character driver.
+
+	The SGX 2D block is set up with platform data, which you may need to
+	enable in Processor type and features.
+
+
+Ioctl Interface
+===============
+
+#include <linux/sgx2d.h>
+
+The following ioctls can be used with the sgx2d device.
+
+* SGX2DIO_WAITIDLE
+	Sleeps until the SGX 2D block is idle. This waits for a 2D event
+	interrupt if the block busy.
+
+* SGX2DIO_SOFTRST
+	Soft reset the 2D block. This releases any processes waiting for
+	idleness.
+
+* SGX2DIO_GETVERS
+	Takes a pointer to a struct sgx2d_vers.
+
+	Gets information and version information about the SGX 2D block. The
+	caps field is a bitmask of capabilities, and can include the following
+	bitmasks, OR'd together:
+	* SGX2D_CAP_FIFOFREE
+		Indicates that a fifo free field is useable.
+
+* SGX2DIO_GETREG
+	Takes a pointer to a struct sgx2d_reg.
+
+	Gets information about where in the IO memory to access a particular
+	register field. Set the id field before the ioctl call. If the ioctl
+	succeeds the offset field will specify the offset of the register into
+	the IO memory, and the mask and shift fields specify where in the
+	register the specified field is.
+
+	Valid register field ids are:
+	* SGX2D_REG_SLAVEPORT (write only)
+		The 32 bit slave port to write the SGX command stream to. It
+		is safe to ignore the mask and offset fields.
+	* SGX2D_REG_FIFOFREE (read only)
+		The field specifying how much space is left in the slave port.
+	* SGX2D_REG_BLTCOUNT (read only)
+		The field specifying how many blits have been completed.
+	* SGX2D_REG_BUSY (read only)
+		The field specifying whether the 2D block is busy.
+	* SGX2D_REG_IDLE (read only)
+		The field specifying whether the 2D block is idle.
+	* SGX2D_REG_BASEADDR
+		The field to put the base physical memory address (divided by
+		4) that all addresses written to the slave port are relative
+		to. It is safe to ignore the mask and offset fields.
+
+	Note that not all of these registers might exist. For example the
+	SGX2D_REG_FIFOFREE register does not exist on Comet.
+
+	Important: It is NOT safe to read from a write only register or write
+	to a read only register.
+
+* SGX2DIO_GETMEM
+	Takes a pointer to a struct sgx2d_meminfo.
+
+	Gets information about the IO memory, and how to map it into userland
+	if necessary. After using this ioctl successfully, there are two cases
+	the userland program should handle:
+	* If the flags field is zero
+		The IO registers needed to access the SGX 2D block are already
+		accessible from userland. The memory area starts at the
+		address in the addr field, and the length in bytes is provided
+		in the len field.
+	* If the flags field is non-zero
+		The IO registers must be mapped in with the mmap syscall. In
+		this case the userland process should provide the value in the
+		addr field as the start parameter, the value in the len field
+		as the length parameter, and the value in the flags field as
+		the flags parameter. If the mmap is successful, the address
+		returned should be used to access the IO registers.
+
+	Important: It is NOT safe or portable to read or write any registers
+	except those accessed with a successful call to the SGX2DIO_GETREG
+	ioctl.

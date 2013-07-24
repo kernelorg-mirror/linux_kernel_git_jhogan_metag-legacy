@@ -1,0 +1,48 @@
+* Imagination Technologies SPI master controller.
+
+Required properties:
+- compatible     : Must be "img,spi"
+- reg            : The register base for the controller.
+- interrupts     : Interrupt line.
+- clocks         : A reference to the SPI clock node.
+- #address-cells : <1>, as required by the generic SPI binding.
+- #size-cells    : <0>, as required by the generic SPI binding.
+
+Optional properties:
+- num-cs         : Number of chip-select pins.
+- clock-frequency: Desired clock frequency. If not specified, it will use the default
+one (40Mhz).
+- dmas           : As described in dma.txt, dmaengine bindings for channel allocation.
+- dma-names      : Similarly, required dmaengine bindings for the previously
+mentioned 'dmas' property. For more information see the dma.txt text file. If
+used, the dma channels should be named "rx" and "tx".
+
+Child nodes follow the generic SPI binding described in spi-bus.txt
+
+Example:
+
+SoC configuration:
+
+spi1: spi@02004e00 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	compatible = "img,spi";
+	reg = <0x02004e00 0x100>;
+	interrupts = <8 4 /* level */>;
+	clocks = <&spim1_clk>;
+	num-cs = <3>;
+	clock-frequency = <40000000>;
+	dmas = <&dma 7 0xffffffff
+		&dma 8 0xffffffff>; /* -1 for any channel */
+	dma-names = "rx", "tx";
+};
+
+Board-specific configuration:
+
+&spi1 {
+	mtd@0 {
+		compatible = "atmel,at45", "atmel,dataflash";
+		spi-max-frequency = <20000000>;
+		reg = <0>; /* chip select */
+	};
+};

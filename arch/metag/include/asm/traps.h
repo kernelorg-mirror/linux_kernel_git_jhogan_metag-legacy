@@ -45,4 +45,19 @@ extern TBIRES __TBIUnExpXXX(TBIRES State, int SigNum, int Triggers, int Inst,
 
 #endif
 
+#ifdef CONFIG_METAG_ROM_WRAPPERS
+
+#ifndef __ASSEMBLY__
+/* Entry type of ROM vector patch table */
+typedef TBIRES (*tbi_ptr)(TBIRES);
+extern tbi_ptr tbi_vectors[];
+extern int tbi_vector_base;
+#endif
+
+/* Entry slots for ROM vector patches */
+#define TBI_VEC_ASYNC_TRIGGER	0
+#define TBI_VEC_ASYNC_RESUME	1
+#define TBI_VEC_RESUME	2
+#endif
+
 #endif /* _METAG_TBIVECTORS_H */

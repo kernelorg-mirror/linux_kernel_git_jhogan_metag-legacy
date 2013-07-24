@@ -128,7 +128,9 @@ dw8250_do_pm(struct uart_port *port, unsigned int state, unsigned int old)
 static int dw8250_probe_of(struct uart_port *p)
 {
 	struct device_node	*np = p->dev->of_node;
+	struct dw8250_data	*d = p->private_data;
 	u32			val;
+	int			err;
 
 	if (!of_property_read_u32(np, "reg-io-width", &val)) {
 		switch (val) {
@@ -148,14 +150,22 @@ static int dw8250_probe_of(struct uart_port *p)
 	if (!of_property_read_u32(np, "reg-shift", &val))
 		p->regshift = val;
 
-	/* clock got configured through clk api, all done */
-	if (p->uartclk)
-		return 0;
-
 	/* try to find out clock frequency from DT as fallback */
 	if (of_property_read_u32(np, "clock-frequency", &val)) {
+		/* clock got configured through clk api, all done */
+		if (p->uartclk)
+			return 0;
 		dev_err(p->dev, "clk or clock-frequency not defined\n");
 		return -EINVAL;
+	} else if (!IS_ERR(d->clk)) {
+		/* set the clock rate */
+		err = clk_set_rate(d->clk, val);
+		if (err) {
+			dev_err(p->dev,
+				"setting clk rate to %u Hz failed (%d)\n",
+				val, err);
+			return err;
+		}
 	}
 	p->uartclk = val;
 

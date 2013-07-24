@@ -33,6 +33,7 @@
 #include <asm/siginfo.h>
 #include <asm/traps.h>
 #include <asm/hwthread.h>
+#include <asm/setup.h>
 #include <asm/switch.h>
 #include <asm/user_gateway.h>
 #include <asm/syscall.h>
@@ -65,6 +66,33 @@ EXPORT_SYMBOL(global_trigger_mask);
 
 unsigned long per_cpu__stack_save[NR_CPUS];
 
+#ifdef CONFIG_METAG_ROM_WRAPPERS
+/*
+ * ROM vector patch table. By default it points to our internal functions,
+ * but these can be overridden if a ROM patch is found to be present.
+ * NB - the TBI_VEC_RESUME vector is normally NULL, as it is implicitly
+ * called within our internal code, but it is filled out during a ROM patch
+ * installation, as we then require its address. This fact can be used to
+ * determine if a patch is installed or not.
+ */
+tbi_ptr tbi_vectors[] = {
+	(tbi_ptr) __TBIASyncTrigger,
+	(tbi_ptr) __TBIASyncResume,
+	(tbi_ptr) 0		/* Place holder for TBIResume in ROM */
+};
+
+TBIRES fault_wrapper(TBIRES State, int SigNum, int Triggers, int Inst,
+		     PTBI pTBI);
+TBIRES switch1_wrapper(TBIRES State, int SigNum, int Triggers, int Inst,
+		       PTBI pTBI);
+TBIRES switchx_wrapper(TBIRES State, int SigNum, int Triggers, int Inst,
+		       PTBI pTBI);
+TBIRES trigger_wrapper(TBIRES State, int SigNum, int Triggers, int Inst,
+		       PTBI pTBI);
+TBIRES kick_wrapper(TBIRES State, int SigNum, int Triggers, int Inst,
+		    PTBI pTBI);
+#endif
+
 static const char * const trap_names[] = {
 	[TBIXXF_SIGNUM_IIF] = "Illegal instruction fault",
 	[TBIXXF_SIGNUM_PGF] = "Privilege violation",
@@ -87,8 +115,8 @@ const char *trap_name(int trapno)
 
 static DEFINE_SPINLOCK(die_lock);
 
-void die(const char *str, struct pt_regs *regs, long err,
-	 unsigned long addr)
+void __noreturn die(const char *str, struct pt_regs *regs,
+		    long err, unsigned long addr)
 {
 	static int die_counter;
 
@@ -121,6 +149,349 @@ void die(const char *str, struct pt_regs *regs, long err,
 	oops_exit();
 	do_exit(SIGSEGV);
 }
+
+#ifdef CONFIG_SOC_CHORUS2
+static void replay_catchbuffer(PTBICTXEXTCB0 pcbuf, struct pt_regs *regs)
+{
+	int reg = 0;
+	int unit = 0;
+	int mask = 0;
+	int raxxx = 0;
+	int load_size = 0;
+	int pp = 0;
+	int die = 0;
+	int datal = 0;
+	int datah = 0;
+
+	current_thread_info()->replay_regs = regs;
+
+	/********* READS or LOADS *************/
+	if (pcbuf->CBFlags & TXCATCH0_READ_BIT) {
+		reg =
+		    (pcbuf->CBFlags & TXCATCH0_LDRXX_BITS) >> TXCATCH0_LDRXX_S;
+		unit =
+		    (pcbuf->CBFlags & TXCATCH0_LDDST_BITS) >> TXCATCH0_LDDST_S;
+
+		if (unit) {
+			mask = 0;
+			load_size =
+			    (pcbuf->
+			     CBFlags & TXCATCH0_LDL2L1_BITS) >>
+			    TXCATCH0_LDL2L1_S;
+			pp = (pcbuf->CBFlags & TXCATCH0_LDM16_BIT) != 0;
+		} else {
+			raxxx =
+			    (pcbuf->
+			     CBFlags & TXCATCH0_RAXX_BITS) >> TXCATCH0_RAXX_S;
+			pr_debug(" Don't yet do RD READs: raxxx %#x\n", raxxx);
+			die = 1;
+			goto out;
+		}
+
+		switch (load_size) {
+		case 0:	/* 8 bit */
+			datal = *(char *)(pcbuf->CBAddr);
+			break;
+
+		case 1:	/* 16 bit */
+			datal = *(short *)(pcbuf->CBAddr);
+			break;
+
+		case 2:	/* 32 bit */
+			datal = *(int *)(pcbuf->CBAddr);
+			break;
+
+		case 3:	/* 64 bit */
+			datal = *(int *)(pcbuf->CBAddr);
+			datah = *(int *)(pcbuf->CBAddr + 4);
+
+			/* pp bit means swap the units we are writing to!
+			 * So, if we swap here, we don't have to swap later on.
+			 */
+			if (pp) {
+				int tmp = datal;
+				datal = datah;
+				datah = tmp;
+			}
+			break;
+
+		default:
+			pr_debug("  unknown read load_size %d\n", load_size);
+			die = 1;
+			goto out;
+			break;
+		}
+
+		switch (unit) {
+		case 0:
+			pr_debug(" Do not do RD Reads yet\n");
+			die = 1;
+			goto out;
+			break;
+
+		case TXCATCH0_LDDST_D1DSP:
+			pr_debug(" Do not handle D1DSP\n");
+			die = 1;
+			goto out;
+			break;
+
+		case TXCATCH0_LDDST_D0DSP:
+			pr_debug(" Do not handle D0DSP\n");
+			die = 1;
+			goto out;
+			break;
+
+		case TXCATCH0_LDDST_TMPLT:
+			pr_debug(" Do not handle TMPLT\n");
+			die = 1;
+			goto out;
+			break;
+
+		case TXCATCH0_LDDST_TR:
+			pr_debug(" Do not handle TR\n");
+			die = 1;
+			goto out;
+			break;
+
+		case TXCATCH0_LDDST_PC:
+			pr_debug(" Do not handle PC\n");
+			die = 1;
+			goto out;
+			break;
+
+		case TXCATCH0_LDDST_A1:
+			/* FIXME I think this can go away if we can be
+			 * sure that 64 bit loads set both units in
+			 * the LDDST field.
+			 */
+			if (load_size == 3) {
+				pr_warn("single dest unit (a1) but 64 bit size, pc %#x\n",
+					regs->ctx.CurrPC);
+				/* 64bit - both units */
+				regs->ctx.AX[reg].U1 = datal;
+				regs->ctx.AX[reg].U0 = datah;
+			} else {
+				regs->ctx.AX[reg].U1 = datal;
+			}
+			break;
+
+		case TXCATCH0_LDDST_A0:
+			/* FIXME I think this can go away if we can be
+			 * sure that 64 bit loads set both units in
+			 * the LDDST field.
+			 */
+			if (load_size == 3) {
+				pr_warn("single dest unit (a0) but 64 bit size, pc %#x\n",
+					regs->ctx.CurrPC);
+				/* 64bit - both units */
+				regs->ctx.AX[reg].U0 = datal;
+				regs->ctx.AX[reg].U1 = datah;
+			} else {
+				regs->ctx.AX[reg].U0 = datal;
+			}
+			break;
+
+		case TXCATCH0_LDDST_D1:
+			/* FIXME - XXX - we can sanity check that we have
+			 * not over-run the context both here and in other
+			 * cases !!! - eg. movs to/from globregs in user
+			 * space.
+			 * Graham
+			 */
+			/* FIXME I think this can go away if we can be
+			 * sure that 64 bit loads set both units in
+			 * the LDDST field.
+			 */
+			if (load_size == 3) {
+				pr_warn("single dest unit (d1) but 64 bit size, pc %#x\n",
+					regs->ctx.CurrPC);
+				/* 64bit - both units */
+				regs->ctx.DX[reg].U1 = datal;
+				regs->ctx.DX[reg].U0 = datah;
+			} else {
+				regs->ctx.DX[reg].U1 = datal;
+			}
+			break;
+
+		case TXCATCH0_LDDST_D0:
+			/* FIXME I think this can go away if we can be
+			 * sure that 64 bit loads set both units in
+			 * the LDDST field.
+			 */
+			if (load_size == 3) {
+				pr_warn("single dest unit (d0) but 64 bit size, pc %#x\n",
+					regs->ctx.CurrPC);
+				/* 64bit - both units */
+				regs->ctx.DX[reg].U0 = datal;
+				regs->ctx.DX[reg].U1 = datah;
+			} else {
+				regs->ctx.DX[reg].U0 = datal;
+			}
+			break;
+
+			/* 64bit load into a pair of units */
+		case TXCATCH0_LDDST_D0 | TXCATCH0_LDDST_D1:
+			if (load_size != 3) {
+				pr_warn("Dual data unit read with non-64bit value?\n");
+				die = 1;
+				goto out;
+			}
+
+			regs->ctx.DX[reg].U0 = datal;
+			regs->ctx.DX[reg].U1 = datah;
+			break;
+
+		case TXCATCH0_LDDST_A0 | TXCATCH0_LDDST_A1:
+			if (load_size != 3) {
+				pr_warn("Dual addr unit read with non-64bit value?\n");
+				die = 1;
+				goto out;
+			}
+
+			regs->ctx.AX[reg].U0 = datal;
+			regs->ctx.AX[reg].U1 = datah;
+			break;
+
+		case TXCATCH0_LDDST_CT:
+			pr_debug(" Do not handle CT reads\n");
+			die = 1;
+			goto out;
+			break;
+
+		default:
+			pr_debug("Unhandled unit %d\n", unit);
+			die = 1;
+			goto out;
+			break;
+		}
+	} else
+	/********************* WRITES **************/
+	{
+		int base_addr = pcbuf->CBAddr & ~0x7;
+
+		mask =
+		    (pcbuf->CBFlags & TXCATCH0_WMASK_BITS) >> TXCATCH0_WMASK_S;
+
+		/* The mask is an active low byte lane mask. Use it to
+		 * figure out how large a transfer we want, and also to
+		 * which address!
+		 */
+		switch (mask) {
+		case 0:
+			/* Full 64bit write */
+			*(int *)(base_addr) = pcbuf->CBData.U0;
+			*(int *)(base_addr + 4) = pcbuf->CBData.U1;
+			break;
+
+		case 0xF0:	/* Bottom 32bits */
+			*(int *)(base_addr) = pcbuf->CBData.U0;
+			break;
+
+		case 0x0F:	/* Top 32bits */
+			*(int *)(base_addr + 4) = pcbuf->CBData.U1;
+			break;
+
+		case 0xFC:	/* Bottom 16bits */
+			*(short *)(base_addr) = pcbuf->CBData.U0;
+			break;
+
+		case 0xF3:	/* Second 16bits */
+			*(short *)(base_addr + 2) = pcbuf->CBData.U0 >> 16;
+			break;
+
+		case 0xCF:	/* Third 16bits */
+			*(short *)(base_addr + 4) = pcbuf->CBData.U1;
+			break;
+
+		case 0x3F:	/* Top 16bits */
+			*(short *)(base_addr + 6) = pcbuf->CBData.U1 >> 16;
+			break;
+
+		case 0xFE:	/* Bottom byte */
+			*(char *)(base_addr) = pcbuf->CBData.U0;
+			break;
+
+		case 0xFD:	/* 2nd byte */
+			*(char *)(base_addr + 1) = pcbuf->CBData.U0 >> 8;
+			break;
+
+		case 0xFB:	/* 3rd byte */
+			*(char *)(base_addr + 2) = pcbuf->CBData.U0 >> 16;
+			break;
+
+		case 0xF7:	/* 4th byte */
+			*(char *)(base_addr + 3) = pcbuf->CBData.U0 >> 24;
+			break;
+
+		case 0xEF:	/* 5th byte */
+			*(char *)(base_addr + 4) = pcbuf->CBData.U1;
+			break;
+
+		case 0xDF:	/* 6th byte */
+			*(char *)(base_addr + 5) = pcbuf->CBData.U1 >> 8;
+			break;
+
+		case 0xBF:	/* 7th byte */
+			*(char *)(base_addr + 6) = pcbuf->CBData.U1 >> 16;
+			break;
+
+		case 0x7F:	/* Top byte */
+			*(char *)(base_addr + 7) = pcbuf->CBData.U1 >> 24;
+			break;
+
+		default:
+			pr_debug("Unknown catch write mask %#x\n", mask);
+			die = 1;
+			goto out;
+			break;
+		}
+	}
+
+out:
+	if (die) {
+		pr_debug("Failed to soft replay catch ...\n");
+
+		pr_debug(" pid %d, PC %#x\n", current->pid, regs->ctx.CurrPC);
+
+		pr_debug(" CBFlags %#x\n", (int)(pcbuf->CBFlags));
+		pr_debug(" CBAddr %#x\n", (int)(pcbuf->CBAddr));
+		pr_debug(" CBData.U0 %#x\n", pcbuf->CBData.U0);
+		pr_debug(" CBData.U1 %#x\n", pcbuf->CBData.U1);
+
+		if (pcbuf->CBFlags & TXCATCH0_READ_BIT) {
+			pr_debug(" Read\n");
+
+			pr_debug("  unit %d, reg %d\n", unit, reg);
+		} else {
+			pr_debug(" Write\n");
+		}
+
+		show_regs(regs);
+		/* Probably should signal user process here! */
+		hard_processor_halt(HALT_PANIC);
+	} else {
+		/* As we have just done the catch buffer action by hand,
+		 * we must now clear out the stored catch buffer state,
+		 * so the hardware does not try to replay it upon resume.
+		 */
+
+		/* What do we do if there is data in the RD pipe ? */
+		if (regs->ctx.SaveMask & TBICTX_CBRP_BIT) {
+			pr_debug("Cannot fix up the RD pipe yet\n");
+			die = 1;
+			goto out;
+		}
+
+		regs->ctx.SaveMask &= ~(TBICTX_XCBF_BIT | TBICTX_CBUF_BIT);
+		pcbuf->CBFlags = 0;
+		pcbuf->CBAddr = 0;
+		pcbuf->CBData.U0 = 0;
+		pcbuf->CBData.U1 = 0;
+	}
+
+	return;
+}
+#endif
 
 #ifdef CONFIG_METAG_DSP
 /*
@@ -338,6 +709,16 @@ TBIRES tail_end_sys(TBIRES State, int syscall, int *restart)
 #endif
 	}
 
+#ifdef CONFIG_SOC_CHORUS2
+	if (State.Sig.pCtx->SaveMask & (TBICTX_CBUF_BIT | TBICTX_XCBF_BIT)) {
+		PTBICTXEXTCB0 cbuf = regs->extcb0;
+
+		if (cbuf->CBFlags | cbuf->CBAddr |
+		    cbuf->CBData.U0 | cbuf->CBData.U1)
+			replay_catchbuffer(cbuf, regs);
+	}
+#endif
+
 	/* TBI will turn interrupts back on at some point. */
 	if (!irqs_disabled_flags((unsigned long)State.Sig.TrigMask))
 		trace_hardirqs_on();
@@ -527,6 +908,11 @@ static int handle_data_fault(PTBICTXEXTCB0 pcbuf, struct pt_regs *regs,
 
 	ret = do_page_fault(regs, data_address, !load_fault(pcbuf), trapno);
 
+#ifdef CONFIG_SOC_CHORUS2
+	if (ret == 0)
+		replay_catchbuffer(pcbuf, regs);
+#endif
+
 	return ret;
 }
 
@@ -564,6 +950,10 @@ TBIRES fault_handler(TBIRES State, int SigNum, int Triggers,
 	case TBIXXF_SIGNUM_IPF: {
 		/* 2nd-level entry invalid (instruction fetch) */
 		unsigned long addr = get_inst_fault_address(regs);
+#ifdef CONFIG_SOC_CHORUS2
+		pr_err("instruction fetch fault at %#lx pid %d comm %s\n",
+		       addr, current->pid, current->comm);
+#endif
 		do_page_fault(regs, addr, 0, SigNum);
 		break;
 	}
@@ -648,7 +1038,9 @@ TBIRES switch1_handler(TBIRES State, int SigNum, int Triggers,
 		 * safely ignore it, so treat all unknown switches
 		 * (including breakpoints) as traps.
 		 */
-		force_sig(SIGTRAP, current);
+		if (notify_die(DIE_TRAP, "debug trap", regs, 0, SigNum,
+			       SIGTRAP) != NOTIFY_STOP)
+			force_sig(SIGTRAP, current);
 		return tail_end(State);
 	}
 
@@ -828,7 +1220,11 @@ void __cpuinit per_cpu_trap_init(unsigned long cpu)
 	int_context.Sig.SaveMask = 0;
 
 	/* And call __TBIASyncTrigger() */
+#ifdef CONFIG_METAG_ROM_WRAPPERS
+	tbi_vectors[TBI_VEC_ASYNC_TRIGGER] (int_context);
+#else
 	__TBIASyncTrigger(int_context);
+#endif
 }
 
 void __init trap_init(void)
@@ -836,12 +1232,37 @@ void __init trap_init(void)
 	unsigned long cpu = smp_processor_id();
 	PTBI _pTBI = per_cpu(pTBI, cpu);
 
+#ifdef CONFIG_METAG_ROM_WRAPPERS
+	unsigned int *paddr;
+	int i;
+
+	/* Check to see if there is a ROM based system that we should use
+	 * instead of our internal copy.
+	 */
+	if (!tbi_vector_base)
+		panic("This core requires a tbi_vector_base parameter.\n");
+
+	paddr = (unsigned int *)tbi_vector_base;
+
+	for (i = 0; i < ARRAY_SIZE(tbi_vectors); i++) {
+		if (paddr[i])
+			tbi_vectors[i] = (tbi_ptr) paddr[i];
+	}
+
+	_pTBI->fnSigs[TBID_SIGNUM_XXF] = fault_wrapper;
+	_pTBI->fnSigs[TBID_SIGNUM_SW0] = switchx_wrapper;
+	_pTBI->fnSigs[TBID_SIGNUM_SW1] = switch1_wrapper;
+	_pTBI->fnSigs[TBID_SIGNUM_SW2] = switchx_wrapper;
+	_pTBI->fnSigs[TBID_SIGNUM_SW3] = switchx_wrapper;
+	_pTBI->fnSigs[TBID_SIGNUM_SWK] = kick_wrapper;
+#else
 	_pTBI->fnSigs[TBID_SIGNUM_XXF] = fault_handler;
 	_pTBI->fnSigs[TBID_SIGNUM_SW0] = switchx_handler;
 	_pTBI->fnSigs[TBID_SIGNUM_SW1] = switch1_handler;
 	_pTBI->fnSigs[TBID_SIGNUM_SW2] = switchx_handler;
 	_pTBI->fnSigs[TBID_SIGNUM_SW3] = switchx_handler;
 	_pTBI->fnSigs[TBID_SIGNUM_SWK] = kick_handler;
+#endif
 
 #ifdef CONFIG_METAG_META21
 	_pTBI->fnSigs[TBID_SIGNUM_DFR] = __TBIHandleDFR;
@@ -864,7 +1285,11 @@ void tbi_startup_interrupt(int irq)
 
 	set_trigger_mask(get_trigger_mask() | TBI_TRIG_BIT(irq));
 
+#ifdef CONFIG_METAG_ROM_WRAPPERS
+	_pTBI->fnSigs[irq] = trigger_wrapper;
+#else
 	_pTBI->fnSigs[irq] = trigger_handler;
+#endif
 }
 
 void tbi_shutdown_interrupt(int irq)
@@ -912,7 +1337,11 @@ int ret_from_fork(TBIRES arg)
 	/* And interrupts should come back on when we resume the real usermode
 	 * code. Call __TBIASyncResume()
 	 */
+#ifdef CONFIG_METAG_ROM_WRAPPERS
+	tbi_vectors[TBI_VEC_ASYNC_RESUME](tail_end(Next));
+#else
 	__TBIASyncResume(tail_end(Next));
+#endif
 	/* ASyncResume should NEVER return */
 	BUG();
 	return 0;

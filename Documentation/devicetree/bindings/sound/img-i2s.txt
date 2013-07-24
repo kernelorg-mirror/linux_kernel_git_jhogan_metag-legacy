@@ -1,0 +1,29 @@
+* Imagination Technologies I2S controller
+
+Required properties:
+- compatible : Must be "img,i2s".
+- reg        : A list containing the I2S audio-out and audio-in registers
+and length respectively.
+- interrupts : Should contain all the interrupts for audio out/in lines. The
+interrupts for the output channels must be first followed by the input one.
+- interrupt-names: The interrupt names "output0", "output1", "output2", "input".
+- clocks     : A reference to the I2S clock node.
+- dmas       : DMA client properties as described in img-mdc-dma.txt. The dmas
+property should contain the DMA phandle along with the DMA peripheral and channel
+number for each channel starting with the output channels first.
+
+Example:
+
+i2s: tz1090-i2s@02004f00 {
+	compatible = "img,i2s";
+	reg = < 0x02004f00 0x100 /* out */
+		0x02005000 0x100 /* in */>;
+	interrupts = < 9 4 /* level */
+		       10 4 /* level */
+		       11 4 /* level */
+		       12 4 /* level */>;
+	interrupt-names = "output0", "output1", "output2", "input";
+	clocks = <&i2sout_sysclk>;
+	dmas = <&dma 9 0xffffffff /* out */
+		&dma 10 0xffffffff /* in */>;
+};

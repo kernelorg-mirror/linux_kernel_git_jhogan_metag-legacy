@@ -1,0 +1,498 @@
+/*
+ * Copyright (C) 2013 Imagination Technologies Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+
+/ {
+	soc {
+		/*
+		 * ============ OSCILLATORS ============
+		 */
+
+		/* XTAL1 frequency is specified in reset bootstrap config */
+		xtal1: xtal1 {
+			compatible = "specified-clock";
+			#clock-cells = <0>;
+			reg = <0x02004004 0x4>;	/* CR_PERIP_RESET_CFG */
+			shift = <8>;		/* FXTAL */
+			width = <4>;
+			clock-frequency =
+			/*	 FXTAL	Frequency */
+				<0	16384000>,
+				<1	19200000>,
+				<2	24000000>,
+				<3	24576000>,
+				<4	26000000>,
+				<5	36000000>,
+				<6	36864000>,
+				<7	38400000>,
+				<8	40000000>;
+			clock-output-names = "xtal1";
+		};
+
+		/* xtal2 oscillator (board specific, but 12MHz recommended) */
+		xtal2: xtal2 {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <0>;
+			clock-output-names = "xtal2";
+		};
+
+		/* xtal3 oscillator (32.768KHz if fitted, assume not fitted) */
+		xtal3: xtal3 {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <0>;
+			clock-output-names = "xtal3";
+		};
+
+
+		/*
+		 * ============ CORE/SYSTEM CLOCK SETUP ============
+		 */
+
+		/* ==== System Clock Undeleted Generation ==== */
+
+		/* xtal1 ---[sysclk0_sw]__ *
+		 * xtal2 --o[          ]   */
+		sysclk0_sw: sysclk0_sw {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&xtal1>,
+				 <&xtal2>;
+			reg = <0x02005908 0x4>;	/* CR_TOP_CLKSWITCH */
+			shift = <0>;		/* CR_TOP_SYSCLK0_SW */
+			width = <1>;
+			clock-output-names = "sysclk0_sw";
+		};
+
+		/* sysclk0_sw ---[sys_pll]--- */
+		sys_pll: sys_pll {
+			compatible = "img,tz1090-pll";
+			#clock-cells = <0>;
+			clocks = <&sysclk0_sw>;
+			reg = <0x02005950 0x8>;	/* CR_TOP_SYSPLL_CTL{0,1} */
+			clock-output-names = "sys_pll";
+		};
+
+		/* sys_pll ---[sysclk_div]--- */
+		sysclk_div: sysclk_div {
+			compatible = "divider-clock";
+			#clock-cells = <0>;
+			clocks = <&sys_pll>;
+			reg = <0x02005914 0x4>;	/* CR_TOP_SYSCLK_DIV */
+			shift = <0>;		/* CR_TOP_SYSDIV */
+			width = <8>;
+			clock-output-names = "sysclk_div";
+		};
+
+		/* sysclk_div ---[sysclk1_sw]__ sys_clk_x2_undeleted	*
+		 * xtal1      --o[          ]				*/
+		sys_clk_x2_undeleted: sysclk1_sw {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&xtal1>,
+				 <&sysclk_div>;
+			reg = <0x02005908 0x4>;	/* CR_TOP_CLKSWITCH */
+			shift = <1>;		/* CR_TOP_SYSCLK1_SW */
+			width = <1>;
+			clock-output-names = "sys_clk_x2_undeleted";
+		};
+
+		/* sys_clk_x2_undeleted ---[meta_clkdiv]--- sys_clk_undeleted */
+		sys_clk_undeleted: meta_clkdiv {
+			compatible = "divider-clock";
+			#clock-cells = <0>;
+			clocks = <&sys_clk_x2_undeleted>;
+			reg = <0x02005918 0x4>;	/* CR_TOP_META_CLKDIV */
+			shift = <0>;		/* CR_TOP_META_X2_EN */
+			width = <2>;
+			clock-output-names = "sys_clk_undeleted";
+			linux,clk-read-only;
+		};
+
+
+		/* ==== Meta core clock Generation ==== */
+
+		/* sys_clk_x2_undeleted ---[meta_clkdelete]--- meta_core_clk */
+		meta_core_clk: meta_clkdelete {
+			compatible = "img,tz1090-deleter";
+			#clock-cells = <0>;
+			clocks = <&sys_clk_x2_undeleted>;
+			reg = <0x0200591c 0x4>;	/* CR_TOP_META_CLKDELETE */
+			shift = <0>;		/* CR_TOP_META_CLKDELETE */
+			width = <10>;
+			clock-output-names = "meta";
+		};
+
+
+		/* ==== Peripheral System Clock Switches ==== */
+
+		scb0_sysclk: scb0_sysclk {
+			compatible = "img,meta-gate-clock";
+			#clock-cells = <0>;
+			/* technically incorrect, compatible with old clk API */
+			clocks = <&scb_clk>;
+			reg = <0x02004010 0x4>;	/* CR_PERIP_CLKEN */
+			bit = <0>;		/* CR_PERIP_SCB0_SYS_CLK_EN */
+			clock-output-names = "scb0";
+		};
+
+		scb1_sysclk: scb1_sysclk {
+			compatible = "img,meta-gate-clock";
+			#clock-cells = <0>;
+			/* technically incorrect, compatible with old clk API */
+			clocks = <&scb_clk>;
+			reg = <0x02004010 0x4>;	/* CR_PERIP_CLKEN */
+			bit = <1>;		/* CR_PERIP_SCB1_SYS_CLK_EN */
+			clock-output-names = "scb1";
+		};
+
+		scb2_sysclk: scb2_sysclk {
+			compatible = "img,meta-gate-clock";
+			#clock-cells = <0>;
+			/* technically incorrect, compatible with old clk API */
+			clocks = <&scb_clk>;
+			reg = <0x02004010 0x4>;	/* CR_PERIP_CLKEN */
+			bit = <2>;		/* CR_PERIP_SCB2_SYS_CLK_EN */
+			clock-output-names = "scb2";
+		};
+
+		spim1_sysclk: spim1_sysclk {
+			compatible = "img,meta-gate-clock";
+			#clock-cells = <0>;
+			/* technically incorrect, compatible with old clk API */
+			clocks = <&spim1_clk>;
+			reg = <0x02004010 0x4>;	/* CR_PERIP_CLKEN */
+			bit = <8>;		/* CR_PERIP_SPIM1_SYS_CLK_EN */
+			clock-output-names = "spi";
+		};
+
+		i2sout_sysclk: i2sout_sysclk {
+			compatible = "img,meta-gate-clock";
+			#clock-cells = <0>;
+			/* technically incorrect, compatible with old clk API */
+			clocks = <&i2s_mclk>;
+			reg = <0x02004010 0x4>;	/* CR_PERIP_CLKEN */
+			bit = <9>;		/* CR_PERIP_I2S_OUT_SYS_CLK_EN */
+			clock-output-names = "i2s";
+		};
+
+
+		/* ==== HEP System Clock Switches ==== */
+		/* sys_clk ---[CR_HEP_CLK_EN.*_CLK_EN]--- *_sysclk */
+
+		twod_sysclk: twod_sysclk {
+			compatible = "img,meta-gate-clock";
+			#clock-cells = <0>;
+			clocks = <&sys_clk_undeleted>;
+			reg = <0x02008c04 0x4>;	/* CR_HEP_CLK_EN */
+			bit = <0>;		/* CR_2D_CLK_EN */
+			clock-output-names = "sgx2d";
+		};
+
+		pdp_sysclk: pdp_sysclk {
+			compatible = "img,meta-gate-clock";
+			#clock-cells = <0>;
+			clocks = <&sys_clk_undeleted>;
+			reg = <0x02008c04 0x4>;	/* CR_HEP_CLK_EN */
+			bit = <2>;		/* CR_PDP_PDI_CLK_EN */
+			clock-output-names = "pdp";
+		};
+
+
+		/*
+		 * ============ ANALOG IP CLOCK SETUP ============
+		 */
+
+		/* ==== ADC PLL ==== */
+
+		/* xtal2 ---[adc_pll_sw0]___	*
+		 * xtal1 --o[           ]	*/
+		adc_pll_sw0: adc_pll_sw0 {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&xtal1>,
+				 <&xtal2>;
+			reg = <0x02005908 0x4>;	/* CR_TOP_CLKSWITCH */
+			shift = <22>;		/* CR_TOP_ADCPLL_CLK_0_SW */
+			width = <1>;
+			clock-output-names = "adc_pll_sw0";
+		};
+
+		/* adc_pll_sw0 ---[adc_pll]--- */
+		adc_pll_clk: adc_pll_clk {
+			compatible = "img,tz1090-pll";
+			#clock-cells = <0>;
+			clocks = <&adc_pll_sw0>;
+			reg = <0x02005958 0x8>;	/* CR_TOP_ADCPLL_CTL{0,1} */
+			clock-output-names = "adc_pll";
+		};
+
+
+		/* ==== AFE Progdiv3clk_to_soc ==== */
+
+		afe_progdiv3clk_to_soc: afe_progdiv3clk_to_soc {
+			#clock-cells = <0>;
+			/* Not yet implemented */
+		};
+
+
+		/*
+		 * ============ PERIPHERAL CLOCK SETUP ============
+		 */
+
+		/* ==== UART Clock Generation ==== */
+
+		/* sys_clk_undeleted ---[uart_sw]---	*
+		 * xtal1             --o[       ]	*/
+		uart_sw: uart_sw {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&xtal1>,
+				 <&sys_clk_undeleted>;
+			reg = <0x02005908 0x4>;	/* CR_TOP_CLKSWITCH */
+			shift = <14>;		/* CR_TOP_UART_SW */
+			width = <1>;
+			clock-output-names = "uart_sw";
+			linux,clk-set-rate-remux;
+		};
+
+		/* uart_sw ---[uart_en]--- */
+		uart_en: uart_en {
+			compatible = "img,meta-gate-clock";
+			#clock-cells = <0>;
+			clocks = <&uart_sw>;
+			reg = <0x0200590c 0x4>;	/* CR_TOP_CLKENAB */
+			bit = <14>;		/* CR_TOP_UART_EN */
+			clock-output-names = "uart_en";
+		};
+
+		/* uart_en ---[uart_div]--- uart_clk */
+		uart_clk: uart_clk {
+			compatible = "divider-clock";
+			#clock-cells = <0>;
+			clocks = <&uart_en>;
+			reg = <0x02005928 0x4>;	/* CR_TOP_UARTCLK_DIV */
+			shift = <0>;
+			width = <8>;
+			clock-output-names = "uart";
+		};
+
+
+		/* ==== SCB (I2C) Clock Generation ==== */
+
+		/* sys_clk_undeleted ---[scb_sw]---	*
+		 * xtal1             --o[      ]	*/
+		scb_sw: scb_sw {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&xtal1>,
+				 <&sys_clk_undeleted>;
+			reg = <0x02005908 0x4>;	/* CR_TOP_CLKSWITCH */
+			shift = <13>;		/* CR_TOP_SCB_SW */
+			width = <1>;
+			clock-output-names = "scb_sw";
+		};
+
+		/* scb_sw ---[scb_en]--- scb_clk */
+		scb_clk: scb_en {
+			compatible = "img,meta-gate-clock";
+			#clock-cells = <0>;
+			clocks = <&scb_sw>;
+			reg = <0x0200590c 0x4>;	/* CR_TOP_CLKENAB */
+			bit = <13>;		/* CR_TOP_SCB_EN */
+			clock-output-names = "scb";
+		};
+
+
+		/* ==== SPI Master 1 Clock Generation ==== */
+
+		/* sys_clk_undeleted ---[spim1_div]--- spim1_clk */
+		spim1_clk: spim1_clk {
+			compatible = "divider-clock";
+			#clock-cells = <0>;
+			clocks = <&sys_clk_undeleted>;
+			reg = <0x02005938 0x4>;	/* CR_TOP_SPI1CLK_DIV */
+			shift = <0>;
+			width = <8>;
+			clock-output-names = "spim1_clk";
+		};
+
+
+		/* ==== I2S Clock Generation ==== */
+
+		/* sys_clk_undeleted ---[i2s_sw21	*
+		 * xtal1             --o[       ]	*/
+		i2s_sw2: i2s_sw2 {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&xtal1>,
+				 <&sys_clk_undeleted>;
+			reg = <0x02005908 0x4>;	/* CR_TOP_CLKSWITCH */
+			shift = <10>;		/* CR_TOP_I2S_2_SW */
+			width = <1>;
+			clock-output-names = "i2s_sw2";
+			linux,clk-set-rate-remux;
+		};
+
+		/* adc_pll_clk ---[i2s_sw01	*
+		 * xtal2       --o[       ]	*/
+		i2s_sw0: i2s_sw0 {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&xtal2>,
+				 <&adc_pll_clk>;
+			reg = <0x02005908 0x4>;	/* CR_TOP_CLKSWITCH */
+			shift = <11>;		/* CR_TOP_I2S_0_SW */
+			width = <1>;
+			clock-output-names = "i2s_sw0";
+			default-clock = <0>;
+		};
+
+		/* i2s_sw0 ---[i2s_sw11	*
+		 * i2s_sw2 --o[       ]	*/
+		i2s_sw1: i2s_sw1 {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&i2s_sw2>,
+				 <&i2s_sw0>;
+			reg = <0x02005908 0x4>;	/* CR_TOP_CLKSWITCH */
+			shift = <12>;		/* CR_TOP_I2S_1_SW */
+			width = <1>;
+			clock-output-names = "i2s_sw1";
+			linux,clk-set-rate-parent;
+			linux,clk-set-rate-remux;
+		};
+
+		/* i2s_sw1 ---[i2s_en] */
+		i2s_en: i2s_en {
+			compatible = "img,meta-gate-clock";
+			#clock-cells = <0>;
+			clocks = <&i2s_sw1>;
+			reg = <0x0200590c 0x4>;	/* CR_TOP_CLKENAB */
+			bit = <12>;		/* CR_TOP_I2S_1_EN */
+			clock-output-names = "i2s_en";
+		};
+
+		/* i2s_en ---[i2s_div]--- i2s_mclk */
+		i2s_mclk: i2s_mclk {
+			compatible = "divider-clock";
+			#clock-cells = <0>;
+			clocks = <&i2s_en>;
+			reg = <0x0200593c 0x4>;	/* CR_TOP_I2SCLK_DIV */
+			shift = <0>;
+			width = <8>;
+			clock-output-names = "i2s_mclk";
+		};
+
+
+		/* ==== USB Clock Generation ==== */
+
+		usb_phy_clk: usb_phy_clk {
+			#clock-cells = <0>;
+			/* Not yet implemented */
+		};
+
+
+		/* ==== Pixel Clock Generation ==== */
+
+		/* pixel_sw3 ---[pixel_sw0]---	*
+		 * xtal1     --o[         ]	*/
+		pixel_sw0: pixel_sw0 {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&xtal1>,
+				 <&pixel_sw3>;
+			reg = <0x02005988 0x4>;	/* CR_TOP_CLKSWITCH2 */
+			shift = <0>;		/* CR_TOP_PIXEL_CLK_0_SW */
+			width = <1>;
+			clock-output-names = "pixel_sw0";
+			linux,clk-set-rate-parent;
+			linux,clk-set-rate-remux;
+		};
+
+		/* pixel_sw4         ---[pixel_sw1]---	*
+		 * sys_clk_undeleted --o[         ]	*/
+		pixel_sw1: pixel_sw1 {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&sys_clk_undeleted>,
+				 <&pixel_sw4>;
+			reg = <0x02005988 0x4>;	/* CR_TOP_CLKSWITCH2 */
+			shift = <1>;		/* CR_TOP_PIXEL_CLK_1_SW */
+			width = <1>;
+			clock-output-names = "pixel_sw1";
+			linux,clk-set-rate-parent;
+			linux,clk-set-rate-remux;
+		};
+
+		/* pixel_sw1 ---[pixel_sw2]---	*
+		 * pixel_sw0 --o[         ]	*/
+		pixel_sw2: pixel_sw2 {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&pixel_sw0>,
+				 <&pixel_sw1>;
+			reg = <0x02005988 0x4>;	/* CR_TOP_CLKSWITCH2 */
+			shift = <2>;		/* CR_TOP_PIXEL_CLK_2_SW */
+			width = <1>;
+			clock-output-names = "pixel_sw2";
+			linux,clk-set-rate-parent;
+			linux,clk-set-rate-remux;
+		};
+
+		/* afe_progdiv3clk_to_soc ---[pixel_sw3]---	*
+		 * adc_pll_clk            --o[         ]	*/
+		pixel_sw3: pixel_sw3 {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&adc_pll_clk>,
+				 <&afe_progdiv3clk_to_soc>;
+			reg = <0x02005988 0x4>;	/* CR_TOP_CLKSWITCH2 */
+			shift = <3>;		/* CR_TOP_PIXEL_CLK_3_SW */
+			width = <1>;
+			clock-output-names = "pixel_sw3";
+			linux,clk-set-rate-parent;
+			linux,clk-set-rate-remux;
+		};
+
+		/* xtal2       ---[pixel_sw4]---	*
+		 * usb_phy_clk --o[         ]		*/
+		pixel_sw4: pixel_sw4 {
+			compatible = "img,meta-mux-clock";
+			#clock-cells = <0>;
+			clocks = <&usb_phy_clk>,
+				 <&xtal2>;
+			reg = <0x02005988 0x4>;	/* CR_TOP_CLKSWITCH2 */
+			shift = <4>;		/* CR_TOP_PIXEL_CLK_4_SW */
+			width = <1>;
+			clock-output-names = "pixel_sw4";
+			linux,clk-set-rate-remux;
+		};
+
+		/* pixel_sw2 ---[pixel_en]--- */
+		pixel_en: pixel_en {
+			compatible = "img,meta-gate-clock";
+			#clock-cells = <0>;
+			clocks = <&pixel_sw2>;
+			reg = <0x0200598c 0x4>;	/* CR_TOP_CLKENAB2 */
+			bit = <2>;		/* CR_TOP_PIXEL_CLK_2_EN */
+			clock-output-names = "pixel_en";
+		};
+
+		/* pixel_en ---[pixel_div]--- */
+		pixel_clk: pixel_div {
+			compatible = "divider-clock";
+			#clock-cells = <0>;
+			clocks = <&pixel_en>;
+			reg = <0x02005998 0x4>;	/* CR_TOP_PIXEL_CLK_DIV */
+			shift = <0>;		/* CR_TOP_PIXEL_CLK_DIV */
+			width = <8>;
+			clock-output-names = "pixel";
+		};
+	};
+};

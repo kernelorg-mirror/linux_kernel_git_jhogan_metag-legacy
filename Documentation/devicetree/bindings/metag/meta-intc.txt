@@ -25,6 +25,13 @@ Optional properties:
 
     - no-mask: The controller doesn't have any mask registers.
 
+    - default-level: List of default level bitfields, one for each bank, where
+      each set bit indicates that the interrupt should be level sensitive by
+      default rather than edge. The purpose of this is mainly to ease the
+      transition to device tree from platform data. It should not be necessary
+      if all IRQ users are configured with devicetree as each one should set the
+      flow type in the interrupt specifier.
+
 * Interrupt Specifier Definition
 
   Interrupt specifiers consists of 2 cells encoded as follows:
@@ -57,6 +64,9 @@ Example 1:
 
 		// Number of interrupt banks
 		num-banks = <2>;
+
+		// IRQs 0-35 are level sensitive, except 16 and 34
+		default-level = <0xfffeffff 0xb>;
 
 		// No HWMASKEXT is available (specify on Chorus2 and Comet ES1)
 		no-mask;

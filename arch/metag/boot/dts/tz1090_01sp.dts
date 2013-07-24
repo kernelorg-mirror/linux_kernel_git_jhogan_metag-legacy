@@ -1,0 +1,65 @@
+/*
+ * Copyright (C) 2012 Imagination Technologies Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+/dts-v1/;
+
+/include/ "tz1090.dtsi"
+
+&xtal2 {
+	clock-frequency = <12000000>;
+};
+
+&xtal3 {
+	clock-frequency = <32768>;
+};
+
+&pinctrl {
+	pinctrl-names = "default";
+	pinctrl-0 = <	&pinctrl_spi1_cs0
+			&pinctrl_tft
+			&pinctrl_sdh>;
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&ir {
+	status = "okay";
+};
+
+&i2c2 {
+	bit-rate = <100000>;	/* limit for HDMI */
+	status = "okay";
+};
+
+/ {
+	model = "ImgTec Comet METAmorph";
+	compatible =	"img,tz1090-01sp",
+			"toumaz,tz1090", "img,meta";
+
+	leds {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <>;
+		softled1 {
+			label = "softled1";
+			gpios = <&gpios0 23 0>;		/* uart0_rts */
+			linux,default-trigger = "mmc0";
+		};
+	};
+};
+
+&spi1 {
+	status = "okay";
+
+	mtd@0 {
+		compatible = "atmel,at45db642d", "atmel,at45", "atmel,dataflash";
+		spi-max-frequency = <20000000>;
+		reg = <0>; /* chip select */
+	};
+};

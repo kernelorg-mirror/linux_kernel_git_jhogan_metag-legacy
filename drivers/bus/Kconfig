@@ -26,4 +26,13 @@ config OMAP_INTERCONNECT
 
 	help
 	  Driver to enable OMAP interconnect error handling driver.
+
+config TZ1090_SOCIF
+	bool "TZ1090 SOCIF Driver"
+	depends on SOC_TZ1090
+	default y
+	help
+	  Driver to catch TZ1090 SOCIF errors such as when a memory access
+	  times out. Instead of taking the target offline the current state is
+	  logged in case it relates to the bad memory access.
 endmenu

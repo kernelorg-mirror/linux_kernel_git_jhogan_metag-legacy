@@ -111,6 +111,31 @@ static inline void __raw_writeq(u64 b, volatile void __iomem *addr)
 #define writeq	__raw_writeq
 
 /*
+ * A load of the architecture/SoC code uses readl/writel functions with raw
+ * physical address numbers rather than __iomem pointers. Until these are fixed
+ * to use metag_in32/metag_out32 or ioremap and __iomem pointers, do the cast
+ * here to hide the warnings.
+ */
+
+#undef readb
+#undef readw
+#undef readl
+#undef readq
+#define readb(addr)	__raw_readb((volatile void __iomem *)(addr))
+#define readw(addr)	__raw_readw((volatile void __iomem *)(addr))
+#define readl(addr)	__raw_readl((volatile void __iomem *)(addr))
+#define readq(addr)	__raw_readq((volatile void __iomem *)(addr))
+
+#undef writeb
+#undef writew
+#undef writel
+#undef writeq
+#define writeb(b, addr)	__raw_writeb(b, (volatile void __iomem *)(addr))
+#define writew(b, addr)	__raw_writew(b, (volatile void __iomem *)(addr))
+#define writel(b, addr)	__raw_writel(b, (volatile void __iomem *)(addr))
+#define writeq(b, addr)	__raw_writeq(b, (volatile void __iomem *)(addr))
+
+/*
  * Meta specific I/O for accessing non-MMU areas.
  *
  * These can be provided with a physical address rather than an __iomem pointer

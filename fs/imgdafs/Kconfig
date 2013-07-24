@@ -1,0 +1,6 @@
+config IMGDAFS_FS
+	tristate "Meta DA filesystem support"
+	depends on METAG_DA
+	help
+	  This enables the DA filesystem, which allows Linux to
+	  to access files on a system attached via a debug adapter.

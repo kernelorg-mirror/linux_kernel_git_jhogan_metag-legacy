@@ -299,6 +299,59 @@ config IR_RX51
 	   The driver uses omap DM timers for generating the carrier
 	   wave and pulses.
 
+config IR_IMG
+	tristate "ImgTec IR Decoder"
+	depends on SOC_TZ1090
+	depends on RC_CORE
+	help
+	   Say Y here if you want to use the ImgTec infrared decoder
+	   functionality found in some ImgTec Socs such as Comet.
+
+config IR_IMG_NEC
+	tristate "NEC protocol support"
+	depends on IR_IMG && !IR_IMG_RAW
+	help
+	   Say Y here to enable support for the NEC protocol in the
+	   ImgTec infrared decoder block.
+
+config IR_IMG_JVC
+	tristate "JVC protocol support"
+	depends on IR_IMG && !IR_IMG_RAW
+	help
+	   Say Y here to enable support for the JVC protocol in the
+	   ImgTec infrared decoder block.
+
+config IR_IMG_SONY
+	tristate "Sony protocol support"
+	depends on IR_IMG && !IR_IMG_RAW
+	help
+	   Say Y here to enable support for the Sony protocol in the
+	   ImgTec infrared decoder block.
+
+config IR_IMG_SHARP
+	tristate "Sharp protocol support"
+	depends on IR_IMG && !IR_IMG_RAW
+	help
+	   Say Y here to enable support for the Sharp protocol in the
+	   ImgTec infrared decoder block.
+
+config IR_IMG_SANYO
+	tristate "Sanyo protocol support"
+	depends on IR_IMG && !IR_IMG_RAW
+	help
+	   Say Y here to enable support for the Sanyo protocol (used by Sanyo,
+	   Aiwa, Chinon remotes) in the ImgTec infrared decoder block.
+
+config IR_IMG_RAW
+	bool "Raw mode"
+	depends on IR_IMG
+	help
+	   Say Y here to switch to raw mode which only passes raw IR signal
+	   changes to the IR raw decoders for software decoding. This is much
+	   less reliable (due to lack of timestamps) and uses more processing
+	   power than using hardware decode, but can be useful for testing,
+	   debug, and to make other protocols available.
+
 config RC_LOOPBACK
 	tristate "Remote Control Loopback Driver"
 	depends on RC_CORE

@@ -1,0 +1,18 @@
+config SND_CHORUS2_SOC
+	tristate "SoC Audio for the Frontier Silicon Chorus2 Chip"
+	depends on SOC_CHORUS2
+	help
+	  Say Y or M if you want to add support for codecs attached to the
+	  Chorus2 I2S Audio out interface.
+
+config SND_CHORUS2_SOC_I2S
+	tristate
+
+config SND_CHORUS2_SOC_ATP_DP
+	tristate "SoC Audio support for ATP-DP Base Layer"
+	depends on SOC_CHORUS2
+	select SND_CHORUS2_SOC
+	select SND_CHORUS2_SOC_I2S
+	select SND_SOC_WM8727
+	help
+	  Say Y if you want Audio support for your Metamorph ATP-DP board.

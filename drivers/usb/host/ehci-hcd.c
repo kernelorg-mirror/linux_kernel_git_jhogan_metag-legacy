@@ -1251,6 +1251,11 @@ MODULE_LICENSE ("GPL");
 #define	PLATFORM_DRIVER		ehci_hcd_w90x900_driver
 #endif
 
+#if defined(CONFIG_SOC_CHORUS2)
+#include "ehci-chorus2.c"
+#define	PLATFORM_DRIVER		ehci_chorus2_driver
+#endif
+
 #ifdef CONFIG_USB_OCTEON_EHCI
 #include "ehci-octeon.c"
 #define PLATFORM_DRIVER		ehci_octeon_driver

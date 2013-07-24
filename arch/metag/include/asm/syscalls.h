@@ -12,6 +12,13 @@ asmlinkage long sys_rt_sigreturn(void);
 
 #include <asm-generic/syscalls.h>
 
+/* kernel/process.c */
+#ifdef CONFIG_SOC_CHORUS2
+asmlinkage long sys_execve_chorus2(const char __user *filename,
+				   const char __user *const __user *argv,
+				   const char __user *const __user *envp);
+#endif
+
 /* kernel/sys_metag.c */
 asmlinkage int sys_metag_setglobalbit(char __user *, int);
 asmlinkage void sys_metag_set_fpu_flags(unsigned int);

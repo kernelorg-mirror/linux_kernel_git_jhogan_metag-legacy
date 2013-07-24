@@ -8,15 +8,221 @@ config META12_FPGA
 	help
 	  This is a Meta 1.2 FPGA bitstream, just a bare CPU.
 
+config SOC_CHORUS2
+	bool "Chorus2 SoC"
+	select METAG_META12
+	select ARCH_REQUIRE_GPIOLIB
+	select HAVE_CLK
+	select IMG_DMAC
+	select METAG_ROM_WRAPPERS
+	help
+	  This is a Frontier Silicon Chorus2 SoC.
+
 config META21_FPGA
 	bool "Meta 2.1 FPGA"
 	select METAG_META21
 	help
 	  This is a Meta 2.1 FPGA bitstream, just a bare CPU.
 
+config SOC_TZ1090
+	bool "Toumaz Xenif TZ1090 SoC (Comet)"
+	select ARCH_REQUIRE_GPIOLIB
+	select COMMON_CLK
+	select DMADEVICES
+	select IMGPDC_IRQ
+	select MDC_DMA
+	select METAG_LNKGET_AROUND_CACHE
+	select METAG_META21
+	select METAG_SMP_WRITE_REORDERING
+	select PINCTRL
+	select PINCTRL_TZ1090
+	select PINCTRL_TZ1090_PDC
+	select TZ1090_MDC_DMA
+	help
+	  This is a Toumaz Technology Xenif TZ1090 (A.K.A. Comet) SoC containing
+	  a 2-threaded HTP.
+
 endchoice
 
 menu "SoC configuration"
+
+if SOC_TZ1090
+
+config SOC_COMET_ES1
+	bool "Prototype Silicon (ES1)"
+	select FB_PDP_QUEUE_CLUT
+	help
+	  Select this if using Prototype ES1 Silicon
+
+config COMET_CACHEFLUSH_BUG
+	depends on SMP && SOC_COMET_ES1
+	def_bool y
+
+config ARCH_SUSPEND_POSSIBLE
+	def_bool y
+
+config METAG_SUSPEND_MEM
+	bool "Suspend to RAM support"
+	depends on SUSPEND
+	help
+	  Say Y here to enable Suspend to RAM support for Comet.
+
+config COMET_SUSPEND_MEM_SAFE
+	bool "Fake Suspend to RAM in SAFE mode (development only)"
+	depends on METAG_SUSPEND_MEM
+	help
+	  Say Y here to fake Suspend to RAM using a watchdog reset if the SoC is
+	  in SAFE mode.
+
+	  This is intended for purely development purposes to emulate suspend to
+	  RAM on boards which have SAFE mode asserted. Instead of powering off
+	  the SoC and allowing the PDC to control wakeup, it blocks waiting for
+	  the wake interrupt and watchdog soft resets. This causes the PDC to be
+	  reset too, therefore wake interrupts will not be detected by Linux on
+	  resume.
+
+menu "DMA channel assigment"
+
+config SOC_COMET_DMA0
+	bool "Comet DMA channel 0"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_COMET_DMA1
+	bool "Comet DMA channel 1"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_COMET_DMA2
+	bool "Comet DMA Channel 2"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_COMET_DMA3
+	bool "Comet DMA Channel 3"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_COMET_DMA4
+	bool "Comet DMA Channel 4"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_COMET_DMA5
+	bool "Comet DMA Channel 5"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_COMET_DMA6
+	bool "Comet DMA Channel 6"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_COMET_DMA7
+	bool "Comet DMA Channel 7"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+
+endmenu
+
+config SOC_COMET_AUDIOCODEC
+	tristate "Expose audio codec setup"
+	depends on SND_SOC_TANSEN
+	help
+	  This will expose audio codec setup through sysfs.
+
+endif
+
+if SOC_CHORUS2
+
+# Chorus2 specific options
+
+menu "DMA channel assigment"
+
+config SOC_CHORUSX_DMA0
+	bool "Chorus2/3 DMA channel 0"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_CHORUSX_DMA1
+	bool "Chorus2/3 DMA channel 1"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_CHORUSX_DMA2
+	bool "Chorus2/3 DMA channel 2"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_CHORUSX_DMA3
+	bool "Chorus2/3 DMA channel 3"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_CHORUSX_DMA4
+	bool "Chorus2/3 DMA channel 4"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_CHORUSX_DMA5
+	bool "Chorus2/3 DMA channel 5"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_CHORUSX_DMA6
+	bool "Chorus2/3 DMA channel 6"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_CHORUSX_DMA7
+	bool "Chorus2/3 DMA channel 7"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_CHORUSX_DMA8
+	bool "Chorus2/3 DMA channel 8"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_CHORUSX_DMA9
+	bool "Chorus2/3 DMA channel 9"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_CHORUSX_DMA10
+	bool "Chorus2/3 DMA channel 10"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+config SOC_CHORUSX_DMA11
+	bool "Chorus2/3 DMA channel 11"
+	default y
+	help
+	  Make this DMA channel available to Linux.
+
+endmenu
+
+endif
 
 if METAG_META21
 

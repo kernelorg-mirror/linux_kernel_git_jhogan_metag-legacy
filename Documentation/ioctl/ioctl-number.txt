@@ -316,6 +316,14 @@ Code  Seq#(hex)	Include File		Comments
 0xDB	00-0F	drivers/char/mwave/mwavepub.h
 0xDD	00-3F	ZFCP device driver	see drivers/s390/scsi/
 					<mailto:aherrman@de.ibm.com>
+0xF2	00-3F	video/pdpfb.h		pdpfb
+					<mailto:james.hogan@imgtec.com>
+0xF2	40-7F	linux/event_timer.h	event timer
+					<mailto:neil.jones@imgtec.com>
+0xF2	80-BF	linux/uccp.h		uccp
+					<mailto:james.hogan@imgtec.com>
+0xF2	C0-FF	linux/sgx2d.h		SGX 2D block
+					<mailto:james.hogan@imgtec.com>
 0xF3	00-3F	drivers/usb/misc/sisusbvga/sisusb.h	sisfb (in development)
 					<mailto:thomas@winischhofer.net>
 0xF4	00-1F	video/mbxfb.h		mbxfb

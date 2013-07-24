@@ -148,6 +148,12 @@ config LCD_HX8357
 	  If you have a HX-8357 LCD panel, say Y to enable its LCD control
 	  driver.
 
+config LCD_IMGPDI
+	tristate "Imagination Technologies PDI LCD Driver"
+	help
+	  If you have an SoC with an Imagination Technologies Panel Display
+	  Interface (PDI) block, say Y to enable its control driver.
+
 endif # LCD_CLASS_DEVICE
 
 #
@@ -424,6 +430,14 @@ config BACKLIGHT_AS3711
 	help
 	  If you have an Austrian Microsystems AS3711 say Y to enable the
 	  backlight driver.
+
+config BACKLIGHT_TZ1090_AUXDAC
+	tristate "TZ1090 Aux-DAC based LCD Backlight"
+	depends on SOC_TZ1090
+	help
+	  This driver controls the level and power of an LCD backlight using the
+	  auxiliary DAC of the TZ1090 SoC. Say Y if your board uses this
+	  hardware to control backlight level.
 
 endif # BACKLIGHT_CLASS_DEVICE
 

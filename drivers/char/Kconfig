@@ -49,6 +49,28 @@ config SGI_MBCS
          If you have an SGI Altix with an attached SABrick
          say Y or M here, otherwise say N.
 
+config IMG_UCCP
+	bool "IMG Universal Communcations Core Platform (UCCP) support"
+	depends on METAG
+	help
+	  This enables the UCCP driver, which allows userspace UCCP loaders
+	  such as uccpld to load and start binaries on the UCCPs.
+
+config IMG_SGX2D
+	bool "PowerVR SGX 2D block support"
+	depends on METAG && HAVE_CLK
+	help
+	  This enables the SGX 2D driver, which allows userland programs
+	  to access the 2D block slave port of the SGX.
+
+config IMG_EVT
+	bool "IMG Event Timestamp driver"
+	depends on METAG
+	help
+	  This enables the IMG timestamp driver which allows userland
+	  to setup the event counter/timestamp hardware and provides
+	  an atomic read of the timestamp along with the 1MHz Timer.
+
 source "drivers/tty/serial/Kconfig"
 
 config TTY_PRINTK
@@ -283,7 +305,8 @@ if RTC_LIB=n
 config RTC
 	tristate "Enhanced Real Time Clock Support (legacy PC RTC driver)"
 	depends on !PPC && !PARISC && !IA64 && !M68K && !SPARC && !FRV \
-			&& !ARM && !SUPERH && !S390 && !AVR32 && !BLACKFIN && !UML
+			&& !ARM && !SUPERH && !S390 && !AVR32 && !BLACKFIN \
+			&& !UML && !METAG
 	---help---
 	  If you say Y here and create a character special file /dev/rtc with
 	  major number 10 and minor number 135 using mknod ("man mknod"), you
@@ -331,7 +354,7 @@ config JS_RTC
 
 config GEN_RTC
 	tristate "Generic /dev/rtc emulation"
-	depends on RTC!=y && !IA64 && !ARM && !M32R && !MIPS && !SPARC && !FRV && !S390 && !SUPERH && !AVR32 && !BLACKFIN && !UML
+	depends on RTC!=y && !IA64 && !ARM && !M32R && !MIPS && !SPARC && !FRV && !S390 && !SUPERH && !AVR32 && !BLACKFIN && !UML && !METAG
 	---help---
 	  If you say Y here and create a character special file /dev/rtc with
 	  major number 10 and minor number 135 using mknod ("man mknod"), you

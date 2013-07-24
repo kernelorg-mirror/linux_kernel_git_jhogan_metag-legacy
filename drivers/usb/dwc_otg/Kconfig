@@ -1,0 +1,106 @@
+menuconfig USB_DWC_OTG
+	bool "Synopsys DWC OTG Controller"
+	depends on 4XX_SOC || CPU_CAVIUM_OCTEON || SOC_TZ1090
+	help
+	  This driver provide USB Host and Device Controller support for the
+	  Synopsys Designware USB OTG Core
+
+choice
+	prompt "Operating Mode"
+	default USB_DWC_OTG_HOST_ONLY
+	depends on USB_DWC_OTG
+	help
+	  Select the operating mode of the controller OTG does both Host and
+	  Device with the selection made by the type of cable used.
+
+config USB_DWC_OTG_OTG
+	bool "OTG Support"
+	depends on USB && USB_GADGET
+	help
+	  Select this for Full OTG Mode. Important You must select Synopsys
+	  DWC_OTG as your peripheral controller in the Gadget Menu
+
+config USB_DWC_OTG_HOST_ONLY
+	bool "Host Only"
+	depends on USB
+	help
+	  Select this for Host only operation no device support
+
+config USB_DWC_OTG_DEVICE_ONLY
+	bool "Device Only"
+	depends on USB_GADGET
+	help
+	  Select this for Device only operation no host support
+
+endchoice
+
+choice
+	prompt "Speed"
+	default USB_DWC_OTG_SPEED_HIGH
+	depends on USB_DWC_OTG
+	help
+	  Select the speed at which the USB Bus should operate at
+
+config USB_DWC_OTG_SPEED_HIGH
+	bool "High Speed (2.0)"
+	help
+	  Select this for High Speed (USB2.0 - 480Mbs/s) operation
+
+config USB_DWC_OTG_SPEED_FULL
+	bool "Full Speed (1.1)"
+	help
+	  Select this for Full Speed (USB1.1 - 12Mb/s) operation.
+	  Useful when support for Full speed devices is needed and split
+	  transactions are not avaialble (eg in descriptor dma mode).
+
+endchoice
+
+choice
+	prompt "DMA Mode"
+	default USB_DWC_OTG_DESC_DMA
+	depends on USB_DWC_OTG
+	help
+	  Select the DMA mode the controller will operate in
+
+config USB_DWC_OTG_SLAVE
+	bool "Slave (no DMA)"
+	help
+	  Select this for Slave mode, no DMA will be performed.
+
+config USB_DWC_OTG_BUFFER_DMA
+	bool "Buffer DMA"
+	help
+	  Select this mode to use the Controllers internal buffer DMA mode
+
+config USB_DWC_OTG_DESC_DMA
+	bool "Descriptor based DMA"
+	help
+	  Select this mode to use the Controllers internal Descriptor based DMA
+	  mode, Note this mode is only available on newer IP versions >2.9
+	  and doesn't support split transactions.
+
+config USB_DWC_OTG_EXT_DMA
+	bool "External DMA"
+	depends on 4XX_SOC
+	help
+	  Select this mode if you wish to use a DMA controller external to the
+	  Controller IP.
+
+endchoice
+
+if USB_DWC_OTG
+
+config USB_DWC_OTG_ISOCHRONOUS
+	bool "Isochronous transfer support"
+	depends on USB_DWC_OTG
+	help
+	  Select to enable support for Isochronous transfers
+
+config USB_DWC_OTG_DEBUG
+	bool "Verbose Debugging"
+	depends on USB_DWC_OTG
+	help
+	  Select to enable verbose debuging, once enabled verbostiy level can be
+	  set via a sysfs entry.
+
+endif

@@ -174,6 +174,41 @@ void show_regs(struct pt_regs *regs)
 	show_trace(NULL, (unsigned long *)regs->ctx.AX[0].U0, regs);
 }
 
+#ifdef CONFIG_SOC_CHORUS2
+static int lock_executable_vmas(struct task_struct *tsk)
+{
+	struct mm_struct *mm = tsk->mm;
+	struct vm_area_struct *vma = mm->mmap;
+	unsigned long start, end;
+	int ret = 0, write, len;
+
+	down_read(&mm->mmap_sem);
+
+	while (vma) {
+		/* All code mappings will have EXEC|READ set. It's possible
+		 * to create a mapping with just EXEC, but get_user_pages()
+		 * will fail on such a mapping so we must skip it here.
+		 */
+		if ((vma->vm_flags & (VM_EXEC|VM_READ)) == (VM_EXEC|VM_READ)
+		    && vma->vm_file) {
+			vma->vm_flags |= VM_LOCKED;
+			start = vma->vm_start;
+			end = vma->vm_end;
+			write = (vma->vm_flags & VM_WRITE) != 0;
+			len = DIV_ROUND_UP(end, PAGE_SIZE) - start/PAGE_SIZE;
+			ret = get_user_pages(tsk, tsk->mm, start,
+					     len, write, 0, NULL, NULL);
+			if (ret < 0)
+				goto out;
+		}
+		vma = vma->vm_next;
+	}
+out:
+	up_read(&mm->mmap_sem);
+	return ret;
+}
+#endif
+
 int copy_thread(unsigned long clone_flags, unsigned long usp,
 		unsigned long arg, struct task_struct *tsk)
 {
@@ -250,6 +285,10 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
 					      GFP_ATOMIC);
 		tsk->thread.dsp_context = ctx;
 	}
+#endif
+
+#ifdef CONFIG_SOC_CHORUS2
+	lock_executable_vmas(tsk);
 #endif
 
 	return 0;
@@ -331,6 +370,24 @@ struct task_struct *__sched __switch_to(struct task_struct *prev,
 
 	return (struct task_struct *) from.Switch.pPara;
 }
+
+#ifdef CONFIG_SOC_CHORUS2
+long sys_execve_chorus2(const char __user *filename,
+			const char __user *const __user *argv,
+			const char __user *const __user *envp)
+{
+	long error = sys_execve(filename, argv, envp);
+	if (error == 0) {
+		/*
+		 * To workaround a chip bug on Chorus2 we must make sure
+		 * we never take a code fetch page fault. We lock all
+		 * non-anonymous executable vmas here.
+		 */
+		error = lock_executable_vmas(current);
+	}
+	return error;
+}
+#endif
 
 void flush_thread(void)
 {

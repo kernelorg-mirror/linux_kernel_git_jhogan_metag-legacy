@@ -364,7 +364,7 @@ static int parse(struct nlattr *na, struct cpumask *mask)
 	return ret;
 }
 
-#if defined(CONFIG_64BIT) && !defined(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS)
+#ifdef CONFIG_HAVE_64BIT_ALIGNED_ACCESS
 #define TASKSTATS_NEEDS_PADDING 1
 #endif
 

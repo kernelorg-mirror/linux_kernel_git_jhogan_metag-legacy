@@ -1,0 +1,28 @@
+* ImgTec PowerDown Controller (PDC) Real Time Clock (RTC)
+
+Required properties:
+- compatible:		Should be "img,pdc-rtc"
+- reg:			physical base address of the controller and length of
+			memory mapped region. May also contain another region
+			with 1 or 2 non-volatile registers to aid Comet clock
+			rate during poweroff workarounds.
+- reg-names:		Should contain at least "regs".
+			May also contain "nonvolatile".
+- interrupts:		The interrupt number to the cpu should be specified. The
+			number of cells representing a interrupt depends on the
+			parent interrupt controller.
+
+Optional properties:
+- time-set-delay:	Number of seconds it takes to set the time.
+- alarm-irq-delay:	Number of seconds that alarm interrupts are delayed.
+			Must not exceed 59 seconds.
+
+Example:
+
+	rtc@02006100 {
+		compatible = "img,pdc-rtc";
+		reg = <0x02006100 0x100>,	/* regs */
+		      <0x02006038 0x8>;		/* nonvolatile */
+		reg-names = "regs", "nonvolatile";
+		interrupts = <30 4>;
+	};
