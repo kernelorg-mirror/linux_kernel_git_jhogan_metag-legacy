@@ -53,6 +53,13 @@ unsigned int irq_ts_index;
 spinlock_t  timing_lock;
 #endif
 
+int reset_hal_params(void)
+{
+	hpriv->cmd_cnt = COMMAND_START_MAGIC;
+	hpriv->event_cnt = 0;
+	return 0;
+}
+
 static int hal_ready(void)
 {
 	unsigned int value = 0;

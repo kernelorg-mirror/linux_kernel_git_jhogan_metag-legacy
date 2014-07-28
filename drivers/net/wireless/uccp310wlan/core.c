@@ -70,15 +70,29 @@ static void vif_bcn_timer_expiry(unsigned long data)
 
 	if (!ieee80211_sdata_running(sdata))
 		return;
-	if (uvif->vif->bss_conf.enable_beacon == false)
+
+	if (uvif->vif->bss_conf.enable_beacon == false) {
+		if (uvif->vif->type == NL80211_IFTYPE_STATION &&
+		    uvif->vif->bss_conf.assoc) {
+			ieee80211_connection_loss(uvif->vif);
+			printk(KERN_DEBUG "Maximum Beacon Loss count exceeded..............Disconnecting\n");
+			del_timer(&uvif->bcn_timer);
+		}
 		return;
+	}
+
 
 	if (uvif->vif->type == NL80211_IFTYPE_AP) {
 		skb_queue_head_init(&bcast_frames);
 
 		temp = skb = ieee80211_beacon_get(uvif->dev->hw, uvif->vif);
-		skb->priority = 1;
-		skb_queue_tail(&bcast_frames, skb);
+
+		if (skb) {
+			skb->priority = 1;
+			skb_queue_tail(&bcast_frames, skb);
+		} else {
+			goto reschedule_timer;
+		}
 
 		skb = ieee80211_get_buffered_bc(uvif->dev->hw, uvif->vif);
 		while (skb) {
@@ -87,8 +101,8 @@ static void vif_bcn_timer_expiry(unsigned long data)
 			temp = skb;
 			skb = ieee80211_get_buffered_bc(uvif->dev->hw, uvif->vif);
 		}
-
-		temp->priority = 0;
+		if (temp)
+			temp->priority = 0;
 
 		spin_lock_irqsave(&uvif->dev->bcast_lock, flags);
 		while ((skb = skb_dequeue(&bcast_frames)))
@@ -96,11 +110,15 @@ static void vif_bcn_timer_expiry(unsigned long data)
 		spin_unlock_irqrestore(&uvif->dev->bcast_lock, flags);
 	} else {
 		skb = ieee80211_beacon_get(uvif->dev->hw, uvif->vif);
-		uccp310wlan_tx_frame(skb, uvif->dev, true);
+		if (skb)
+			uccp310wlan_tx_frame(skb, uvif->dev, true);
+		else
+			goto reschedule_timer;
 
 		/* TODO: IBSS PS handling */
 	}
 
+reschedule_timer:
 	mod_timer(&uvif->bcn_timer, jiffies + msecs_to_jiffies(uvif->vif->bss_conf.beacon_int));
 
 }
@@ -124,6 +142,7 @@ int uccp310wlan_core_init(struct mac80211_dev *dev)
 			512, /* Tx MSDU life time in msecs */
 			dev->params->ed_sensitivity,
 			dev->params->auto_sensitivity,
+			dev->params->dyn_ed_ceiling,
 			dev->params->rf_params);
 
 	uccp310wlan_prog_txpower(dev->txpower);
@@ -165,6 +184,9 @@ void uccp310wlan_vif_add(struct umac_vif *uvif)
 		type = IF_MODE_STA_BSS;
 		uvif->noa_active = 0;
 		skb_queue_head_init(&uvif->noa_que);
+		init_timer(&uvif->bcn_timer);
+		uvif->bcn_timer.data = (unsigned long)uvif;
+		uvif->bcn_timer.function = vif_bcn_timer_expiry;
 		break;
 	case NL80211_IFTYPE_ADHOC:
 		type = IF_MODE_STA_IBSS;
@@ -202,8 +224,6 @@ void uccp310wlan_vif_add(struct umac_vif *uvif)
 					uvif->config.edca_params[queue].txop,
 					uvif->config.edca_params[queue].cwmin,
 					uvif->config.edca_params[queue].cwmax);
-
-
 	}
 }
 
@@ -217,6 +237,7 @@ void uccp310wlan_vif_remove(struct umac_vif *uvif)
 	switch (uvif->vif->type) {
 	case NL80211_IFTYPE_STATION:
 		type = IF_MODE_STA_BSS;
+		del_timer(&uvif->bcn_timer);
 		break;
 	case NL80211_IFTYPE_ADHOC:
 		type = IF_MODE_STA_IBSS;
@@ -335,6 +356,12 @@ void uccp310wlan_vif_bss_info_changed(struct umac_vif *uvif, struct ieee80211_bs
 	switch (uvif->vif->type) {
 	case NL80211_IFTYPE_STATION:
 		if (changed & BSS_CHANGED_ASSOC) {
+			if (uvif->dev->active_vifs == 1) {
+				if (uvif->vif->bss_conf.assoc)
+					uccp310wlan_prog_scan_ind(0);
+				else
+					uccp310wlan_prog_scan_ind(1);
+			}
 			if (bss_conf->assoc) {
 				UMAC_DEBUG("%s-UMAC: AID %d, CAPS 0x%04x\n", uvif->dev->name, bss_conf->aid, bss_conf->assoc_capability |
 						(bss->wmm_used << 9));
@@ -345,6 +372,9 @@ void uccp310wlan_vif_bss_info_changed(struct umac_vif *uvif, struct ieee80211_bs
 							uvif->vif->addr,
 							bss_conf->assoc_capability | (bss->wmm_used << 9));
 				uvif->noa_active = 0;
+				mod_timer(&uvif->bcn_timer, (jiffies +  msecs_to_jiffies(uvif->dev->params->max_bcn_loss * uvif->vif->bss_conf.beacon_int)));
+			} else {
+				del_timer(&uvif->bcn_timer);
 			}
 		}
 		break;
@@ -479,10 +509,14 @@ void uccp310wlan_rx_frame(struct sk_buff *skb, void *context)
 	struct ieee80211_hdr *hdr;
 	struct ieee80211_rx_status rx_status;
 	int i;
+	struct ieee80211_vif *vif = NULL;
+	struct umac_vif   *uvif;
+	int vif_index;
+
 
 	dev->stats->rx_packet_count++;
 
-	skb_pull(skb, 32); /* Remove RX control information */
+	skb_pull(skb, 44); /* Remove RX control information */
 
 #ifdef CONFIG_RX_DEBUG
 	printk(KERN_DEBUG "%s-RX: RX frame, length = %d, RSSI = %d, rate = %d\n", dev->name, rx->buff_len, rx->rssi, rx->rate);
@@ -519,7 +553,22 @@ void uccp310wlan_rx_frame(struct sk_buff *skb, void *context)
 	if (((hdr->frame_control & IEEE80211_FCTL_FTYPE) == IEEE80211_FTYPE_MGMT) &&
 			((hdr->frame_control & IEEE80211_FCTL_STYPE) == IEEE80211_STYPE_BEACON)) {
 		rx_status.mactime = get_unaligned_le64(rx->timestamp);
-		rx_status.flag |= RX_FLAG_MACTIME_START;
+		rx_status.flag |= RX_FLAG_MACTIME_END;
+		for (vif_index = 0; vif_index < dev->params->num_vifs; vif_index++) {
+			vif = (struct ieee80211_vif *)rcu_dereference(dev->vifs[vif_index]);
+			if (vif && (vif->type == NL80211_IFTYPE_STATION) && (vif->bss_conf.assoc) &&
+				(!memcmp((vif_to_sdata(vif))->u.mgd.bssid, hdr->addr3, ETH_ALEN))) {
+				uvif = (struct umac_vif *)vif->drv_priv;
+				mod_timer(&uvif->bcn_timer, (jiffies +
+					msecs_to_jiffies(uvif->dev->params->max_bcn_loss * vif->bss_conf.beacon_int)));
+			}
+			if (vif && !compare_ether_addr(hdr->addr2, (vif_to_sdata(vif))->u.mgd.bssid)) {
+				memcpy(dev->params->ts1, rx->ts1, sizeof(rx->ts1));
+				memcpy(dev->params->ts2, rx->ts2, sizeof(rx->ts2));
+				memcpy(dev->params->bssid, (vif_to_sdata(vif))->u.mgd.bssid, ETH_ALEN);
+			}
+
+		}
 	}
 
 	memcpy(IEEE80211_SKB_RXCB(skb), &rx_status, sizeof(rx_status));

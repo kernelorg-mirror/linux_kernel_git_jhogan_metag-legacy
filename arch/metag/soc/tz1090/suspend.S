@@ -1,4 +1,4 @@
-! Copyright 2010 Imagination Technologies Ltd.
+! Copyright 2010-2014 Imagination Technologies Ltd.
 !
 ! Functions for suspending the comet SoC.
 
@@ -130,8 +130,7 @@ ENTRY(_metag_comet_standby)
 	MOVT	D0FrT, #HI(CR_TOP_SYSPLL_CTL1)
 	ADD	D0FrT, D0FrT, #LO(CR_TOP_SYSPLL_CTL1)
 	GETD	D0Ar6, [D0FrT]
-	MOVT	D0Ar4, #HI(1 << CR_TOP_SYSPLL_PWRDN_BIT)
-	OR	D0Ar6, D0Ar6, D0Ar4
+	ORT	D0Ar6, D0Ar6, #HI(1 << CR_TOP_SYSPLL_PWRDN_BIT)
 	SETD	[D0FrT], D0Ar6
 #endif
 #endif
@@ -162,17 +161,30 @@ ENTRY(_metag_comet_standby)
 #endif
 
 #ifdef META_PLL_BYPASS
-	! power up the PLL
+	! power up the PLL, assert reset, and allow time to lock on
 #ifdef META_PLL_PWRDN
-	! CR_TOP_SYSPLL_CTL1 ^= (1 << CR_TOP_SYSPLL_PWRDN_BIT)
 	MOVT	D0FrT, #HI(CR_TOP_SYSPLL_CTL1)
 	ADD	D0FrT, D0FrT, #LO(CR_TOP_SYSPLL_CTL1)
 	GETD	D0Ar6, [D0FrT]
-	MOVT	D0Ar4, #HI(1 << CR_TOP_SYSPLL_PWRDN_BIT)
-	XOR	D0Ar6, D0Ar6, D0Ar4
+	! CR_TOP_SYSPLL_CTL1 ^= PWRDN_BIT (clear) | RESET (set)
+	XORT	D0Ar6, D0Ar6, #HI((1 << CR_TOP_SYSPLL_PWRDN_BIT) | \
+				  (1 << CR_TOP_SYSPLL_RESET_BIT))
+	SETD	[D0FrT], D0Ar6
+	! wait for min 5uS reset pulse (max XTAL1 = 40MHz, 5uS = 200 cycles)
+	MPAUSE 2
+	! CR_TOP_SYSPLL_CTL1 &= ~RESET
+	ANDMT	D0Ar6, D0Ar6, #HI(~(1 << CR_TOP_SYSPLL_RESET_BIT))
+	! CR_TOP_SYSPLL_CTL1 |= FASTEN
+	ORT	D0Ar6, D0Ar6, #HI(1 << CR_TOP_SYSPLL_FASTEN_BIT)
 	SETD	[D0FrT], D0Ar6
 	! wait for PLL to power back up and sort itself out
-	MPAUSE 2000
+	! May require up to 500 divided rclk cycles (assume divided XTAL1)
+	! Max divider = 64, Meta clocked off XTAL1 too
+	! Delay = 500*64 = 32000 cycles
+	MPAUSE 320
+	! CR_TOP_SYSPLL_CTL1 &= ~FASTEN
+	ANDMT	D0Ar6, D0Ar6, #HI(~(1 << CR_TOP_SYSPLL_FASTEN_BIT))
+	SETD	[D0FrT], D0Ar6
 #endif
 
 	! Switch system clock back to PLL

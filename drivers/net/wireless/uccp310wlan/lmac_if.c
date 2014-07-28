@@ -89,6 +89,16 @@ int uccp310wlan_prog_reset(unsigned int reset_type)
 			sizeof(struct umac_cmd_reset));
 }
 
+int uccp310wlan_prog_scan_ind(unsigned int scan_start)
+{
+	struct umac_cmd_scan_ind  scan;
+
+	scan.hdr.id = scan_start ? CMD_SCAN_START : CMD_SCAN_STOP;
+	scan.hdr.flags = 0;
+	return uccp310wlan_send_cmd((unsigned char *) &scan,
+			sizeof(struct umac_cmd_scan_ind));
+}
+
 int uccp310wlan_prog_vif_ctrl(int index,
 		unsigned char *mac_addr,
 		unsigned int  vif_type,
@@ -299,6 +309,7 @@ int uccp310wlan_prog_global_cfg(unsigned int rx_msdu_lifetime,
 		unsigned int tx_msdu_lifetime,
 		unsigned int sensitivity,
 		unsigned int dyn_ed_enable,
+		unsigned int dyn_ed_ceiling,
 		unsigned char *rf_params)
 {
 	struct umac_cmd_global_cfg  gbl_config;
@@ -310,6 +321,7 @@ int uccp310wlan_prog_global_cfg(unsigned int rx_msdu_lifetime,
 	gbl_config.tx_msdu_lifetime = tx_msdu_lifetime;
 	gbl_config.ed_sensitivity = sensitivity;
 	gbl_config.dynamic_ed_enable = dyn_ed_enable;
+	gbl_config.dynamic_ed_ceiling = dyn_ed_ceiling;
 	memcpy(gbl_config.rf_params, rf_params, 8);
 
 	return uccp310wlan_send_cmd((unsigned char *) &gbl_config,

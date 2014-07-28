@@ -43,6 +43,7 @@ struct umac_key {
 /* Commands */
 
 extern int uccp310wlan_prog_reset(unsigned int reset_type);
+extern int uccp310wlan_prog_scan_ind(unsigned int scan_ind);
 extern int uccp310wlan_prog_vif_ctrl(int index,
 	unsigned char *vif_addr,
 	unsigned int  vif_type,
@@ -85,6 +86,7 @@ extern int uccp310wlan_prog_global_cfg(unsigned int rx_msdu_lifetime,
 	unsigned int tx_msdu_lifetime,
 	unsigned int sensitivity,
 	unsigned int dyn_ed_enabled,
+	unsigned int dyn_ed_ceiling,
 	unsigned char *rf_params);
 extern int uccp310wlan_prog_txpower(unsigned int txpower);
 extern int uccp310wlan_prog_mcast_addr_cfg(unsigned char  *mcast_addr,

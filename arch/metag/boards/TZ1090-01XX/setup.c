@@ -93,35 +93,13 @@ static int __init comet_01xx_init_usb(void)
 	return 0;
 }
 
-/* Allocate all SDIO GPIOs and drive them low. */
-static struct gpio sd_temp_gpios[] = {
-	{ GPIO_SDIO_CMD,	GPIOF_OUT_INIT_LOW, "SDIO_CMD"},
-	{ GPIO_SDIO_CLK,	GPIOF_OUT_INIT_LOW, "SDIO_CLK"},
-	{ GPIO_SDIO_D0,		GPIOF_OUT_INIT_LOW, "SDIO_D<0>"},
-	{ GPIO_SDIO_D1,		GPIOF_OUT_INIT_LOW, "SDIO_D<1>"},
-	{ GPIO_SDIO_D2,		GPIOF_OUT_INIT_LOW, "SDIO_D<2>"},
-	{ GPIO_SDIO_D3,		GPIOF_OUT_INIT_LOW, "SDIO_D<3>"},
-};
-
 /*
- * Toggle the power by switching off the power line, and driving the SD pins
- * low to ensure it switches off. NB switch only on rev2 onwards.
+ * Toggle the power by switching off the power line. NB switch only on rev2
+ * onwards.
  */
 static void mci_setpower(u32 slot_id, u32 volt)
 {
-	int err;
-	if (volt) {
-		gpio_free_array(sd_temp_gpios, ARRAY_SIZE(sd_temp_gpios));
-
-		gpio_set_value(GPIO_PDC_GPIO0, 1);
-	} else {
-		gpio_set_value(GPIO_PDC_GPIO0, 0);
-
-		err = gpio_request_array(sd_temp_gpios,
-			ARRAY_SIZE(sd_temp_gpios));
-		if (err)
-			pr_warn("SDIO pins already allocated. Can not pull low.\n");
-	}
+	gpio_set_value(GPIO_PDC_GPIO0, volt);
 }
 
 /*

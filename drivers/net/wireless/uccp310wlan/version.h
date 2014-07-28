@@ -27,7 +27,7 @@
 *END**************************************************************************/
 #ifndef _UCCP310WLAN_VERSION_H
 #define _UCCP310WLAN_VERSION_H
-#define UMAC_VERSION "2_3_1"
+#define UMAC_VERSION "2_3_4"
 #endif /* _UCCP310WLAN_VERSION_H */
 
 /* EOF */

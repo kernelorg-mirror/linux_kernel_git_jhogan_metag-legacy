@@ -220,7 +220,11 @@ start_again:
 		*updating = upd;
 }
 
-/* caller must hold lock. does handle read during time update. */
+/*
+ * caller must hold lock.
+ * does handle read during time update.
+ * does not initialise tm->wday, tm->yday, or tm->tm_isdst
+ */
 static void _pdc_rtc_read_time(struct pdc_rtc_priv *priv, struct rtc_time *tm)
 {
 	int upd;
@@ -417,7 +421,7 @@ static void pdc_rtc_stop_alarm(struct pdc_rtc_priv *priv)
 
 	spin_lock_irqsave(&priv->lock, flags);
 	if (priv->alarm_irq_delay) {
-		pdc_rtc_read_time(priv->dev, &tm);
+		_pdc_rtc_read_time(priv, &tm);
 		rtc_tm_to_time(&tm, &now);
 	}
 	_pdc_rtc_stop_alarm(priv, now);
@@ -462,7 +466,7 @@ static int _pdc_rtc_set_alarm(struct pdc_rtc_priv *priv, bool temporary,
 	if (priv->alarm_irq_delay) {
 		alrm_adj = *alrm;
 
-		pdc_rtc_read_time(priv->dev, &tm);
+		_pdc_rtc_read_time(priv, &tm);
 		rtc_tm_to_time(&tm, &now);
 
 try_again_locked:
@@ -576,7 +580,7 @@ try_again_locked:
 		 */
 		spin_lock_irqsave(&priv->lock, flags);
 		if (!priv->alarm_pending) {
-			pdc_rtc_read_time(priv->dev, &tm);
+			_pdc_rtc_read_time(priv, &tm);
 			rtc_tm_to_time(&tm, &now);
 			/* If it's too late, immediately trigger the alarm */
 			if (scheduled <= now) {
@@ -717,7 +721,7 @@ static irqreturn_t pdc_rtc_isr(int irq, void *dev_id)
 		priv->hardstop_time = 0;
 		if (events & RTC_AF) {
 			if (!now && priv->alarm_irq_delay) {
-				pdc_rtc_read_time(priv->dev, &tm);
+				_pdc_rtc_read_time(priv, &tm);
 				rtc_tm_to_time(&tm, &now);
 			}
 			priv->alarm_pending = 1;
@@ -726,7 +730,7 @@ static irqreturn_t pdc_rtc_isr(int irq, void *dev_id)
 	} else {
 		/* make absolutely sure that the alarm is properly stopped */
 		if (priv->alarm_irq_delay) {
-			pdc_rtc_read_time(priv->dev, &tm);
+			_pdc_rtc_read_time(priv, &tm);
 			rtc_tm_to_time(&tm, &now);
 		}
 		_pdc_rtc_stop_alarm(priv, now);

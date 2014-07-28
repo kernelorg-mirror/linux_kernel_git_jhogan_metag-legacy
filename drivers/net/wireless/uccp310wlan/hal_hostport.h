@@ -98,7 +98,7 @@ void _uccp310wlan_80211if_exit(void);
 /******************************************************************************************************/
 #define HAL_SHARED_MEM_OFFSET           0x30000
 #define HAL_WLAN_BULK_RAM_START		(HAL_META_BULK_RAM + (hpriv->shm_offset))
-#define HAL_WLAN_BULK_RAM_LEN		0x00012000
+#define HAL_WLAN_BULK_RAM_LEN		0x00016000
 
 /* Command, Event and Buff mappping offsets */
 #define HAL_COMMAND_OFFSET                    (0)
@@ -106,6 +106,7 @@ void _uccp310wlan_80211if_exit(void);
 
 #define HAL_BULK_RAM_CMD_START                 ((hpriv->bulk_ram_mem_addr) + HAL_COMMAND_OFFSET)
 #define HAL_BULK_RAM_EVENT_START               ((hpriv->bulk_ram_mem_addr) + HAL_EVENT_OFFSET)
+
 
 #define HAL_IRQ_LINE                      external_irq_map(UCC0_IRQ_NUM)
 

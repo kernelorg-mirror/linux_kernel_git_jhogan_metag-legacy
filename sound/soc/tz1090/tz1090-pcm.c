@@ -118,7 +118,7 @@ out:
 /*Called on stream close */
 static int comet_pcm_close(struct snd_pcm_substream *substream)
 {
-	snd_dmaengine_pcm_close(substream);
+	snd_dmaengine_pcm_close_release_chan(substream);
 	return 0;
 }
 

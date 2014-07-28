@@ -30,14 +30,14 @@
 #ifndef _UCCP310WLAN_UMAC_LMAC_IF_H_
 #define _UCCP310WLAN_UMAC_LMAC_IF_H_
 
+#include <linux/compiler.h>
+
 #define MICHAEL_LEN                   8
 #define MAX_KEY_LEN                   16
 
 #define WEP40_KEYLEN                  5
 #define WEP104_KEYLEN                 13
 #define MAX_WEP_KEY_LEN               13
-
-#define _PACKED_          __attribute__((__packed__))
 
 enum UMAC_QUEUE_NUM {
 	WLAN_AC_BK = 0,
@@ -51,7 +51,7 @@ enum UMAC_QUEUE_NUM {
 struct umac_lmac_msg_hdr {
 	unsigned int  id;
 	unsigned int  flags;
-} _PACKED_;
+} __packed;
 
 /* Commands */
 enum UMAC_CMD {
@@ -73,6 +73,8 @@ enum UMAC_CMD {
 	CMD_MIB_STATS,
 	CMD_PHY_STATS,
 	CMD_TEST, /* Can be used by hardware abstraction layer(s) */
+	CMD_SCAN_START,
+	CMD_SCAN_STOP,
 	CMD_LAST
 };
 /* UMAC commands */
@@ -86,7 +88,11 @@ struct umac_cmd_reset {
 #define LMAC_ENABLE     0
 #define LMAC_DISABLE    1
 	unsigned int reset_type;
-} _PACKED_;
+} __packed;
+
+struct umac_cmd_scan_ind {
+	struct umac_lmac_msg_hdr hdr;
+} __packed;
 
 struct umac_cmd_vif_ctrl {
 	struct umac_lmac_msg_hdr hdr;
@@ -120,7 +126,7 @@ struct umac_cmd_vif_ctrl {
 	 * interface address to add or delete
 	 */
 	unsigned char       mac_addr[ETH_ALEN];
-} _PACKED_;
+} __packed;
 
 struct umac_cmd_vif_cfg {
 	struct umac_lmac_msg_hdr hdr;
@@ -200,7 +206,7 @@ struct umac_cmd_vif_cfg {
 	/* bssid of interface */
 	unsigned char        bssid[ETH_ALEN];
 
-} _PACKED_;
+} __packed;
 
 struct umac_cmd_global_cfg {
 	struct umac_lmac_msg_hdr hdr;
@@ -211,6 +217,7 @@ struct umac_cmd_global_cfg {
 	unsigned int         tx_msdu_lifetime;
 
 	int                  ed_sensitivity;
+	int		     dynamic_ed_ceiling;
 
 	/*
 	 * dynamic_ed_enable -
@@ -222,12 +229,12 @@ struct umac_cmd_global_cfg {
 	unsigned int         dynamic_ed_enable;
 
 	unsigned char        rf_params[8];
-} _PACKED_ ;
+} __packed;
 
 struct umac_cmd_txpower {
 	struct umac_lmac_msg_hdr  hdr;
 	unsigned int        txpower; /* In dbm */
-} _PACKED_;
+} __packed;
 
 struct umac_cmd_mcst_filter_cfg {
 	struct umac_lmac_msg_hdr hdr;
@@ -245,7 +252,7 @@ struct umac_cmd_mcst_filter_cfg {
 	 */
 	unsigned char       addr[ETH_ALEN];
 
-} _PACKED_;
+} __packed;
 
 struct umac_cmd_mcst_filter_ctrl {
 	struct umac_lmac_msg_hdr hdr;
@@ -258,7 +265,7 @@ struct umac_cmd_mcst_filter_ctrl {
 #define MCAST_FILTER_DISABLE  0
 #define MCAST_FILTER_ENABLE   1
 	unsigned int        ctrl;
-} _PACKED_ ;
+} __packed;
 
 struct umac_cmd_rcv_bcn_mode {
 	struct umac_lmac_msg_hdr hdr;
@@ -271,7 +278,7 @@ struct umac_cmd_rcv_bcn_mode {
 #define RCV_NETWORK_BCNS      1
 #define RCV_NO_BCNS           2
 	unsigned int        mode;
-} _PACKED_ ;
+} __packed;
 
 struct umac_cmd_txq_params {
 	struct umac_lmac_msg_hdr  hdr;
@@ -309,7 +316,7 @@ struct umac_cmd_txq_params {
 	 */
 	unsigned char        vif_addr[ETH_ALEN];
 
-} _PACKED_;
+} __packed;
 
 struct umac_cmd_ps_cfg {
 	struct umac_lmac_msg_hdr hdr;
@@ -332,12 +339,12 @@ struct umac_cmd_ps_cfg {
 	 */
 	unsigned char        vif_addr[ETH_ALEN];
 
-} _PACKED_ ;
+} __packed;
 
 struct umac_cmd_channel {
 	struct umac_lmac_msg_hdr hdr;
 	unsigned int        channel;
-} _PACKED_ ;
+} __packed;
 
 struct umac_cmd_peer_key_cfg {
 	struct umac_lmac_msg_hdr hdr;
@@ -388,7 +395,7 @@ struct umac_cmd_peer_key_cfg {
 
 	unsigned char       rx_mic[MICHAEL_LEN];
 
-} _PACKED_ ;
+} __packed;
 
 struct umac_cmd_if_key_cfg {
 	struct umac_lmac_msg_hdr hdr;
@@ -427,7 +434,7 @@ struct umac_cmd_if_key_cfg {
 		} rsn_grp_key;
 	} key;
 
-} _PACKED_ ;
+} __packed;
 
 struct umac_cmd_tx {
 	struct umac_lmac_msg_hdr hdr;
@@ -502,15 +509,15 @@ struct umac_cmd_tx {
 	 */
 	unsigned int     force_encrypt;
 
-} _PACKED_;
+} __packed;
 
 struct umac_cmd_mib_stats {
 	struct umac_lmac_msg_hdr hdr;
-} _PACKED_ ;
+} __packed;
 
 struct umac_cmd_phy_stats {
 	struct umac_lmac_msg_hdr hdr;
-} _PACKED_ ;
+} __packed;
 
 /* Events */
 
@@ -537,7 +544,7 @@ struct umac_event_lmac_error {
 	 * LMAC will send the unexpected errors in this event..
 	 */
 	unsigned int        error;
-} _PACKED_ ;
+} __packed;
 
 struct umac_event_noa {
 	struct umac_lmac_msg_hdr hdr;
@@ -552,12 +559,12 @@ struct umac_event_noa {
 #define ABSENCE_START 0 /* Indicates AP is absent */
 #define ABSENCE_STOP  1 /* Indicates AP is present */
 	unsigned int ap_present;
-} _PACKED_ ;
+} __packed;
 
 struct umac_event_reset_complete {
 	struct umac_lmac_msg_hdr hdr;
 	char                version[6];
-} _PACKED_ ;
+} __packed;
 
 struct umac_event_rx {
 	struct umac_lmac_msg_hdr hdr;
@@ -567,8 +574,12 @@ struct umac_event_rx {
 	unsigned char       timestamp[8];
 #define RX_MIC_SUCCESS 0 /* No MIC error in frame */
 #define RX_MIC_FAILURE 1 /* MIC error in frame */
-	unsigned int        status;
-} _PACKED_ ;
+	unsigned int	    status;
+	unsigned char	    ts1[8];
+	unsigned char	    ts2[4];
+
+
+} __packed;
 
 
 struct umac_event_tx_done {
@@ -596,7 +607,7 @@ struct umac_event_tx_done {
 	unsigned int        retries_num;
 	unsigned int        rate;
 	unsigned int        queue;
-} _PACKED_ ;
+} __packed;
 
 struct umac_event_mib_stats {
 	struct umac_lmac_msg_hdr hdr;
@@ -618,7 +629,7 @@ struct umac_event_mib_stats {
 	unsigned int    tx_ack_pkt_cnt;
 	unsigned int    frag_success_cnt;
 	int             sensitivity;
-} _PACKED_;
+} __packed;
 
 struct umac_event_phy_stats {
 	struct umac_lmac_msg_hdr hdr;

@@ -80,7 +80,7 @@
 #define INT_TIMING			0x40000
 
 /* level interrupts need clearing after handling instead of before */
-#define INT_LEVEL			0x01e00
+#define INT_LEVEL			0x00600
 
 /* don't allow any interrupts while the clock may be off */
 #define INT_ENABLE_MASK_INACTIVE	0x00000

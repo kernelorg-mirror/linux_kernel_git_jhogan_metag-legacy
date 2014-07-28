@@ -53,6 +53,7 @@ struct mdc_chan {
 	/* List of current DMA descriptors */
 	struct list_head		active_desc; /* Active descriptors */
 	struct list_head		free_desc; /* Used descriptors */
+	struct list_head		ready_desc;
 	bool				sg; /* true for sg xfer */
 	bool				cyclic; /* true for cyclic xfer */
 	bool				is_list; /* list-based xfer */
@@ -90,6 +91,7 @@ struct mdc_dma_desc {
 	int				buffer_size;
 	int				sample_size;
 	int				sample_count;
+	bool				irq_acked;
 };
 
 /* Forward declaration for dma driver */
@@ -317,7 +319,7 @@ static void img_dma_reset(struct mdc_chan *mchan)
 	/*thread id used in tag for reads*/
 	MDC_SET_FIELD(rpconf, MDC_RTHREAD, mchan->thread);
 	/*thread id used in tag for writes*/
-	MDC_SET_FIELD(rpconf, MDC_STHREAD, mchan->thread);
+	MDC_SET_FIELD(rpconf, MDC_WTHREAD, mchan->thread);
 
 	/*priority of transfers*/
 	MDC_SET_FIELD(rpconf, MDC_PRIORITY, mchan->priority);
@@ -348,6 +350,7 @@ static irqreturn_t mdc_handler_isr(int irq, void *chan_id)
 
 	u32 irq_status;
 	struct mdc_chan *mchan = chan_id;
+	struct mdc_dma_desc *desc;
 
 	spin_lock(&mchan->lock);
 
@@ -361,11 +364,19 @@ static irqreturn_t mdc_handler_isr(int irq, void *chan_id)
 					mchan->mdma->base_addr,
 					mchan->a_chan_nr, 0);
 		/* Skip tasklet? */
-		if (mchan->skip_callback)
+		if (mchan->skip_callback) {
 			mchan->skip_callback = false;
-		else
+		} else {
+			list_for_each_entry(desc, &mchan->active_desc, node) {
+				if (!desc->irq_acked || mchan->cyclic) {
+					desc->sample_count++;
+					desc->irq_acked = true;
+					break;
+				}
+			}
 			/* Schedule the tasklet */
 			tasklet_schedule(&mchan->tasklet);
+		}
 	}
 
 	spin_unlock(&mchan->lock);
@@ -383,10 +394,8 @@ static irqreturn_t mdc_handler_isr(int irq, void *chan_id)
 static void mdc_dma_tasklet(unsigned long data)
 {
 	struct mdc_chan *mchan = (struct mdc_chan *)data;
-	struct mdc_dma_desc *desc;
+	struct mdc_dma_desc *desc, *safe;
 	unsigned long flags;
-	dma_async_tx_callback callback = NULL;
-	void *param = NULL;
 
 	spin_lock_irqsave(&mchan->lock, flags);
 	if (list_empty(&mchan->active_desc)) {
@@ -394,24 +403,48 @@ static void mdc_dma_tasklet(unsigned long data)
 		return;
 	}
 
-	desc = list_first_entry(&mchan->active_desc, typeof(*desc), node);
-	if (++desc->sample_count == desc->total_samples) {
-		desc->sample_count = 0;
-		mchan->finished = true;
-		/* For cyclic, this descriptor will remain active */
-		if (!mchan->cyclic)
-			/* Move it back to the free list */
-			list_move_tail(&desc->node, &mchan->free_desc);
-	}
-	if (desc->txd.callback) {
-		callback = desc->txd.callback;
-		param = desc->txd.callback_param;
+	list_for_each_entry_safe(desc, safe, &mchan->active_desc, node) {
+		dev_vdbg(mchan2dev(mchan),
+			 "Tasklet descriptor\n"
+			 "Address      : 0x%p\n"
+			 "Sample count : %d\n"
+			 "Total count  : %d\n"
+			 "Acked        : %d\n",
+			 desc, desc->sample_count, desc->total_samples,
+			 desc->irq_acked);
+		if (desc->sample_count >= desc->total_samples) {
+			if (desc->irq_acked) {
+				desc->sample_count = 0;
+				mchan->finished = true;
+				desc->irq_acked = false;
+			}
+			/*
+			 * Move it to the ready list.
+			 * For cyclic we keep it active.
+			 */
+			if (!mchan->cyclic)
+				list_move_tail(&desc->node, &mchan->ready_desc);
+		}
 	}
 	spin_unlock_irqrestore(&mchan->lock, flags);
 
-	/* We are safe to call the callback now */
-	if (callback)
-		callback(param);
+	/*
+	 * If cyclic, that means we only have one descriptor so get it and
+	 * see if there is a callback to call now
+	 */
+	if (mchan->cyclic) {
+		desc = list_first_entry(&mchan->active_desc, typeof(*desc), node);
+		if (desc->txd.callback)
+			desc->txd.callback(desc->txd.callback_param);
+	} else {
+		list_for_each_entry_safe(desc, safe, &mchan->ready_desc, node) {
+			if (desc->txd.callback)
+				desc->txd.callback(desc->txd.callback_param);
+			async_tx_ack(&desc->txd);
+			/* Move it back to the free list */
+			list_move_tail(&desc->node, &mchan->free_desc);
+		}
+	}
 }
 
 /*
@@ -430,7 +463,7 @@ static dma_cookie_t mdc_dma_tx_submit(struct dma_async_tx_descriptor *txd)
 	cookie = dma_cookie_assign(&dma_desc->txd);
 	dma_desc->status = DMA_IN_PROGRESS;
 	/* Add descriptor to active list */
-	list_add(&dma_desc->node, &mchan->active_desc);
+	list_add_tail(&dma_desc->node, &mchan->active_desc);
 
 	spin_unlock_irqrestore(&mchan->lock, flags);
 
@@ -537,7 +570,7 @@ static struct mdc_dma_desc *mdc_dma_get_desc(struct mdc_chan *chan,
 	}
 	/* We couldn't find a suitable descriptor */
 	spin_unlock_irqrestore(&chan->lock, irq_flags);
-	desc = kzalloc(sizeof(*desc), GFP_KERNEL);
+	desc = kzalloc(sizeof(*desc), GFP_ATOMIC);
 	if (!desc) {
 		dev_err(mchan2dev(chan),
 			"Failed to allocate DMA descriptor\n");
@@ -638,6 +671,7 @@ static struct dma_async_tx_descriptor *mdc_prep_memcpy(struct dma_chan *chan,
 	mchan->is_list = false;
 	mchan->cyclic = false;
 	/* tx defaults for tx_status. single transfer */
+	mdesc->irq_acked = false;
 	mdesc->sample_count = 0;
 	mdesc->sample_size = 1;
 	mdesc->total_samples = mdesc->buffer_size = 1;
@@ -720,6 +754,7 @@ static struct dma_async_tx_descriptor *mdc_prep_dma_cyclic(
 	if (!mdesc)
 		return NULL;
 
+	mdesc->irq_acked = false;
 	mdesc->sample_count = 0;
 	mdesc->total_samples = 0;
 	mdesc->sample_size = period_len;
@@ -825,6 +860,8 @@ static struct dma_async_tx_descriptor *mdc_prep_slave_sg(
 	struct img_dma_mdc_list *desc_list;
 	dma_addr_t list_base, next_list, addr;
 	int i, width, temp, burst_size_min, burst_size, req_width;
+	u32 genconf, rpconf;
+	dma_addr_t dst, src;
 	u32 len;
 
 	if (unlikely(!sg_len || !sgl || !mchan))
@@ -838,8 +875,10 @@ static struct dma_async_tx_descriptor *mdc_prep_slave_sg(
 	if (!mdesc)
 		return NULL;
 
-	mchan->is_list = true;
+	mchan->is_list = (sg_len > 1);
+	mchan->cyclic = false;
 	mchan->sg = true;
+	mdesc->irq_acked = false;
 	mdesc->sample_count = 0;
 	mdesc->sample_size = 1; /* single list item */
 	mdesc->total_samples = mdesc->buffer_size = sg_len;
@@ -866,81 +905,136 @@ static struct dma_async_tx_descriptor *mdc_prep_slave_sg(
 
 	img_dma_reset(mchan);
 
-	/* This is for the MDC linked-list */
-	desc_list = (struct img_dma_mdc_list *)mchan->virt_addr;
-	mdesc->start_list = list_base = next_list = mchan->dma_addr;
-
-	/* Hand back the DMA buffer to the CPU */
-	dma_sync_single_for_cpu(mchan->mdma->dma_slave.dev,
-				mchan->dma_addr,
-				PAGE_SIZE, DMA_BIDIRECTIONAL);
-
 	burst_size_min = burst_size_lookup[mdma->config.bus_width & 0x7];
 
-	for_each_sg(sgl, sg, sg_len, i) {
-		/*
-		 * Each list item is a 32-byte packet represented by the
-		 * img_dma_mdc_list struct. Every member of that struct
-		 * corresponds to the channel register
-		 */
-		next_list += sizeof(struct img_dma_mdc_list);
-		len = sg_dma_len(sg);
-		addr = sg_dma_address(sg);
+	if (!mchan->is_list) {
+		len = sg_dma_len(sgl);
+		addr = sg_dma_address(sgl);
 		width = check_widths(mchan->mdma, addr);
-		desc_list->gen_conf = 0x30000088
+		genconf = 0x30000088
 			| ((mchan->a_chan_nr & 0x3f) << 20)
 			| ((mchan->access_delay & 0x7) << 16);
 
 		temp = (mchan->thread & 0xf);
-		desc_list->readport_conf = 0x00000002 | temp << 2
+		rpconf = 0x00000002 | temp << 2
 			| temp << 24 | temp << 16;
 
-		MDC_SET_FIELD(desc_list->readport_conf, MDC_PRIORITY,
+		MDC_SET_FIELD(rpconf, MDC_PRIORITY,
 			      mchan->priority);
 
 		if (direction == DMA_MEM_TO_DEV) {
-			MDC_SET_FIELD(desc_list->gen_conf, MDC_INC_R, 1);
-			MDC_SET_FIELD(desc_list->gen_conf, MDC_WIDTH_R, width);
+			MDC_SET_FIELD(genconf, MDC_INC_R, 1);
+			MDC_SET_FIELD(genconf, MDC_WIDTH_R, width);
 			req_width = mchan->dma_config.dst_addr_width;
-			MDC_SET_FIELD(desc_list->gen_conf, MDC_WIDTH_W,
+			MDC_SET_FIELD(genconf, MDC_WIDTH_W,
 				      map_to_mdc_width(req_width));
-			desc_list->read_addr = addr;
-			desc_list->write_addr = mchan->dma_config.dst_addr;
+			src = addr;
+			dst = mchan->dma_config.dst_addr;
 			burst_size = mchan->dma_config.dst_maxburst;
-			desc_list->readport_conf |=
-				(burst_size < burst_size_min)
-				? (burst_size_min - 1) << 4
-				: (burst_size - 1) << 4;
 		} else {
-			MDC_SET_FIELD(desc_list->gen_conf, MDC_INC_W, 1);
-			MDC_SET_FIELD(desc_list->gen_conf, MDC_WIDTH_W, width);
+			MDC_SET_FIELD(genconf, MDC_INC_W, 1);
+			MDC_SET_FIELD(genconf, MDC_WIDTH_W, width);
 			req_width = mchan->dma_config.src_addr_width;
-			MDC_SET_FIELD(desc_list->gen_conf, MDC_WIDTH_R,
+			MDC_SET_FIELD(genconf, MDC_WIDTH_R,
 				      map_to_mdc_width(req_width));
-			desc_list->read_addr = mchan->dma_config.src_addr;
-			desc_list->write_addr = addr;
+			src = mchan->dma_config.src_addr;
+			dst = addr;
 			burst_size = mchan->dma_config.src_maxburst;
+		}
+		rpconf |= (burst_size < burst_size_min)
+			? (burst_size_min - 1) << 4
+			: (burst_size - 1) << 4;
+
+		/* Write the single sg entry to hardware */
+		MDC_RSET_READ_ADDRESS((unsigned long)mchan->mdma->base_addr,
+				      mchan->a_chan_nr, src);
+		MDC_RSET_WRITE_ADDRESS((unsigned long)mchan->mdma->base_addr,
+				       mchan->a_chan_nr, dst);
+		MDC_RSET_GENERAL_CONFIG((unsigned long)mchan->mdma->base_addr,
+					mchan->a_chan_nr, genconf);
+		MDC_RSET_READ_PORT_CONFIG((unsigned long)mchan->mdma->base_addr,
+					  mchan->a_chan_nr, rpconf);
+		MDC_RSET_TRANSFER_SIZE((unsigned long)mchan->mdma->base_addr,
+				       mchan->a_chan_nr, len - 1);
+		wmb();
+
+	} else {
+		/* This is for the MDC linked-list */
+		desc_list = (struct img_dma_mdc_list *)mchan->virt_addr;
+		mdesc->start_list = list_base = next_list = mchan->dma_addr;
+
+		/* Hand back the DMA buffer to the CPU */
+		dma_sync_single_for_cpu(mchan->mdma->dma_slave.dev,
+					mchan->dma_addr,
+					PAGE_SIZE, DMA_BIDIRECTIONAL);
+
+		for_each_sg(sgl, sg, sg_len, i) {
+			/*
+			 * Each list item is a 32-byte packet represented by the
+			 * img_dma_mdc_list struct. Every member of that struct
+			 * corresponds to the channel register
+			 */
+			next_list += sizeof(struct img_dma_mdc_list);
+			len = sg_dma_len(sg);
+			addr = sg_dma_address(sg);
+			width = check_widths(mchan->mdma, addr);
+			desc_list->gen_conf = 0x30000088
+				| ((mchan->a_chan_nr & 0x3f) << 20)
+				| ((mchan->access_delay & 0x7) << 16);
+
+			temp = (mchan->thread & 0xf);
+			desc_list->readport_conf = 0x00000002 | temp << 2
+				| temp << 24 | temp << 16;
+
+			MDC_SET_FIELD(desc_list->readport_conf, MDC_PRIORITY,
+				      mchan->priority);
+
+			if (direction == DMA_MEM_TO_DEV) {
+				MDC_SET_FIELD(desc_list->gen_conf, MDC_INC_R,
+					      1);
+				MDC_SET_FIELD(desc_list->gen_conf, MDC_WIDTH_R,
+					      width);
+				req_width = mchan->dma_config.dst_addr_width;
+				MDC_SET_FIELD(desc_list->gen_conf, MDC_WIDTH_W,
+					      map_to_mdc_width(req_width));
+				desc_list->read_addr = addr;
+				desc_list->write_addr =
+						mchan->dma_config.dst_addr;
+				burst_size = mchan->dma_config.dst_maxburst;
+			} else {
+				MDC_SET_FIELD(desc_list->gen_conf, MDC_INC_W,
+					      1);
+				MDC_SET_FIELD(desc_list->gen_conf, MDC_WIDTH_W,
+					      width);
+				req_width = mchan->dma_config.src_addr_width;
+				MDC_SET_FIELD(desc_list->gen_conf, MDC_WIDTH_R,
+					      map_to_mdc_width(req_width));
+				desc_list->read_addr =
+						mchan->dma_config.src_addr;
+				desc_list->write_addr = addr;
+				burst_size = mchan->dma_config.src_maxburst;
+			}
 			desc_list->readport_conf |=
 				(burst_size < burst_size_min)
 				? (burst_size_min - 1) << 4
 				: (burst_size - 1) << 4;
+
+			desc_list->xfer_size = len - 1;
+			desc_list->node_addr = next_list;
+			desc_list->cmds_done = 0;
+			desc_list->ctrl_status = 0x11;
+
+			desc_list++;
 		}
 
-		desc_list->xfer_size = len - 1;
-		desc_list->node_addr = next_list;
-		desc_list->cmds_done = 0;
-		desc_list->ctrl_status = 0x11;
+		desc_list[-1].node_addr = 0;
 
-		desc_list++;
+		/* we are done with the DMA buffer, give it back to the device */
+		dma_sync_single_for_device(mchan->mdma->dma_slave.dev,
+					   mchan->dma_addr,
+					   PAGE_SIZE,
+					   DMA_BIDIRECTIONAL);
 	}
-
-	desc_list[-1].node_addr = 0;
-
-	/* we are done with the DMA buffer, give it back to the device */
-	dma_sync_single_for_device(mchan->mdma->dma_slave.dev,
-				   mchan->dma_addr,
-				   PAGE_SIZE,
-				   DMA_BIDIRECTIONAL);
 
 	return &mdesc->txd;
 }
@@ -1251,6 +1345,12 @@ static int mdc_terminate_all(struct dma_chan *chan)
 		kfree(desc);
 	}
 
+	/* Safe removal of list items */
+	list_for_each_entry_safe(desc, safe, &mchan->ready_desc, node) {
+		list_del(&desc->node);
+		kfree(desc);
+	}
+
 	/* Reset cookie for this channel */
 	dma_cookie_init(chan);
 
@@ -1392,7 +1492,9 @@ static void __init mdc_chan_init(struct mdc_dmadev *mdma,
 		mdc_chan->dchan.device = &mdma->dma_slave;
 		mdc_chan->a_chan_nr = i;
 		mdc_chan->periph = 0;
-		if (i < mdma->config.dma_channels)
+		spin_lock_init(&mdc_chan->lock);
+		if ((i < mdma->config.dma_channels) &&
+		    (mdma->callbacks->available(i)))
 			mdma->slave_channel[i].alloc_status =
 				IMG_DMA_CHANNEL_AVAILABLE;
 		else
@@ -1407,6 +1509,7 @@ static void __init mdc_chan_init(struct mdc_dmadev *mdma,
 		/* init the list of descriptors for this channel */
 		INIT_LIST_HEAD(&mdc_chan->active_desc);
 		INIT_LIST_HEAD(&mdc_chan->free_desc);
+		INIT_LIST_HEAD(&mdc_chan->ready_desc);
 
 		/* Add channel to the DMA channel linked-list */
 		list_add_tail(&mdc_chan->dchan.device_node,
@@ -1436,6 +1539,8 @@ int mdc_dma_probe(struct platform_device *pdev,
 		dev_err(dev, "Can't allocate controller\n");
 		return -ENOMEM;
 	}
+
+	spin_lock_init(&mdma->lock);
 
 	mem_resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	mdma->base_addr = devm_request_and_ioremap(dev, mem_resource);

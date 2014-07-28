@@ -46,42 +46,11 @@
  * The FIFO is 16 bytes deep. If we can fit the transfer in the FIFO
  * it's more efficient to do that and avoid the overhead of setting
  * up DMA.
- *
- *
- * NOTE: This is set to zero to disable PIO for now. It works with mmc but not
- * the Marvell 88W8686 wifi chip for reasons that are unknown at present.
  */
-#define DMA_MIN_SIZE		0 /*16 if if worked for all devices*/
+#define DMA_MIN_SIZE		32
 
-#if defined(CONFIG_META_DMA_CONTROLLER)
-
-/* BURST SIZE is in bytes for MDC */
+/* BURST SIZE is in bytes */
 #define BURST_SIZE		8 /*Fifo is 16 bytes deep so burst this many*/
-#define BURST_BYTES		(BURST_SIZE*8)
-
-#define BURST_MASK              (~(BURST_BYTES - 1))
-
-#else /* DMAC */
-
-/* We have to work around a hardware bug. When DMAing from external memory to
- * the SPI controller the DMAC creates a byte mask for the first and last
- * transfers. Unfortunately it uses the end byte mask for every burst, not just
- * the final burst. The workaround is to make sure we only DMA whole bursts
- * (so the end byte mask is all 1s) or single bursts if we're transferring
- * less than a whole burst.
- *
- * The burst size is defined in bus-width terms so 1 is a 64-bit burst.
- */
-#define BURST_SIZE              1
-#define BURST_BYTES             (BURST_SIZE*8)
-#define BURST_MASK              (~(BURST_BYTES - 1))
-
-/* The DMAC also cannot do DMA from unaligned buffers thus we copy the data to
- * a dma-able bounce buffer first.
- */
-#define NEED_BOUNCE_BUFFERS	1
-
-#endif
 
 /* SPI - Device Registers */
 #define SPI_DEV0_REG            0x000   /* Device 0*/
@@ -106,11 +75,19 @@
 
 #define SPI_SDTRIG_EN           0x1
 
-#define SPI_GDTRIG		0x1
+#define SPI_GDTRIG		0x01
+#define SPI_GDFUL		0x08
 #define SPI_ALLDONE_TRIG	0x10
 
 #define SPI_WRITE_INT_MASK      0x1f
 #define SPI_READ_INT_MASK       0x1f
+
+#define SPI_DI_GDFUL		BIT(19)	/* RX FIFO full */
+#define SPI_DI_GDHF		BIT(18)	/* RX FIFO half full */
+#define SPI_DI_GDEX		BIT(17)	/* RX FIFO not empty */
+#define SPI_DI_SDFUL		BIT(3)	/* TX FIFO full */
+#define SPI_DI_SDHF		BIT(2)	/* TX FIFO half full */
+#define SPI_DI_SDEX		BIT(1)	/* TX FIFO not empty */
 
 #define START_STATE   ((void *)0)
 #define RUNNING_STATE ((void *)1)
@@ -138,6 +115,7 @@ struct driver_data {
 
 	/* Clocks */
 	struct clk *clk;
+	unsigned long clk_rate;
 
 	struct img_spi_master *master_info;
 
@@ -159,11 +137,6 @@ struct driver_data {
 
 	/* Length of the current DMA */
 	size_t len;
-
-	/* Length of any subsequent DMA needed to clean up after the bug
-	 * mentioned above.
-	 */
-	size_t tail_len;
 
 	/* Total length of the transfer */
 	size_t map_len;
@@ -234,7 +207,7 @@ static u8 hz_to_clk_div(struct driver_data *drv_data, u32 speed_hz)
 {
 	/*  Register value is:
 	 *  Fout = (Fin * reg / 512) MHz */
-	u8 val = min_t(unsigned int, speed_hz/(clk_get_rate(drv_data->clk)/512),
+	u8 val = min_t(unsigned int, speed_hz/((drv_data->clk_rate)/512),
 				     0xffU);
 
 	/* Clamp value at 1 as 0 is invalid (we get no clock) */
@@ -316,8 +289,7 @@ static void start_dma(struct driver_data *drv_data, struct chip_data *chip)
 
 	transaction |= (chip_select << 16);
 
-	if ((drv_data->tail_len) ||
-	    (!drv_data->cs_change && !drv_data->last_transfer))
+	if (!drv_data->cs_change && !drv_data->last_transfer)
 		transaction |= SPI_TRANS_REG_CONT_BIT;
 
 	/* Ensure all writes to the tx buffer have completed. */
@@ -419,8 +391,11 @@ static void start_pio(struct driver_data *drv_data, struct chip_data *chip)
 {
 	unsigned int transaction = 0;
 	unsigned int chip_select = drv_data->cur_chip->chip_select_num;
-	unsigned int i;
-	uint32_t irq_status;
+	unsigned int tx, rx = 0;
+	const u8 *write_buf = drv_data->tx;
+	u8 *read_buf = drv_data->rx;
+	uint32_t di;
+	int can_tx, can_rx;
 
 	if (chip->cs_high)
 		chip_select |= 0x1;
@@ -433,12 +408,14 @@ static void start_pio(struct driver_data *drv_data, struct chip_data *chip)
 	if (!drv_data->cs_change && !drv_data->last_transfer)
 		transaction |= SPI_TRANS_REG_CONT_BIT;
 
-	/* Fill up the FIFO */
-	for (i = 0; i < drv_data->map_len; i++) {
-		const u8 *write_buf = drv_data->tx;
+	/* Prime the FIFO */
+	for (tx = 0; tx < drv_data->map_len; tx++) {
 		u8 write_byte;
+		/* until FIFO is half full */
+		if (spi_readl(drv_data, SPI_DI_STATUS) & SPI_DI_SDHF)
+			break;
 		if (write_buf)
-			write_byte = write_buf[i];
+			write_byte = write_buf[tx];
 		else
 			write_byte = 0x00;
 		spi_writeb(write_byte, drv_data, DMA_SPIO_SENDDAT);
@@ -447,17 +424,42 @@ static void start_pio(struct driver_data *drv_data, struct chip_data *chip)
 	/* Start the transaction */
 	spi_writel(transaction, drv_data, SPI_TRANS_REG);
 
-	/* Wait for the data we're going to read to fill the FIFO */
-	irq_status = 0;
-	while (!((irq_status & SPI_GDTRIG) || (irq_status & SPI_ALLDONE_TRIG)))
-		irq_status = spi_readl(drv_data, DMA_SPII_INT_STAT);
-
-	/* Read from FIFO */
-	for (i = 0; i < drv_data->map_len; i++) {
-		u8 *read_buf = drv_data->rx;
-		u8 read_byte = spi_readb(drv_data, DMA_SPII_GETDAT);
-		if (read_buf)
-			read_buf[i] = read_byte;
+	/* Maintain FIFOs until transfer is complete */
+	can_tx = (tx < drv_data->map_len);
+	can_rx = (rx < drv_data->map_len);
+	while (can_tx || can_rx || !(spi_readl(drv_data, DMA_SPII_INT_STAT) &
+				     (SPI_GDTRIG | SPI_ALLDONE_TRIG))) {
+		di = spi_readl(drv_data, SPI_DI_STATUS);
+		/*
+		 * Top up TX unless both RX and TX are half full,
+		 * in which case RX needs draining more urgently.
+		 */
+		if (can_tx && !(di & SPI_DI_SDFUL) &&
+		    (!can_rx || ((di & (SPI_DI_SDHF | SPI_DI_GDHF)) !=
+				       (SPI_DI_SDHF | SPI_DI_GDHF)))) {
+			/* Write to TX FIFO */
+			u8 write_byte;
+			if (write_buf)
+				write_byte = write_buf[tx];
+			else
+				write_byte = 0x00;
+			spi_writeb(write_byte, drv_data, DMA_SPIO_SENDDAT);
+			++tx;
+			can_tx = (tx < drv_data->map_len);
+		}
+		/*
+		 * Drain RX unless neither RX or TX are half full,
+		 * in which case TX needs filling more urgently.
+		 */
+		if (can_rx && (di & SPI_DI_GDEX) &&
+		    (!can_tx || (di & (SPI_DI_SDHF | SPI_DI_GDHF)))) {
+			/* Read from RX FIFO */
+			u8 read_byte = spi_readb(drv_data, DMA_SPII_GETDAT);
+			if (read_buf)
+				read_buf[rx] = read_byte;
+			++rx;
+			can_rx = (rx < drv_data->map_len);
+		}
 	}
 
 	/* Clear any interrupts we generated */
@@ -503,27 +505,6 @@ static irqreturn_t spi_irq(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
-	if (drv_data->tail_len) {
-		if (drv_data->rx_dma)
-			drv_data->rx_dma += drv_data->len;
-
-		if (drv_data->tx_dma)
-			drv_data->tx_dma += drv_data->len;
-
-		drv_data->len = drv_data->tail_len;
-
-		drv_data->tail_len = 0;
-
-		start_dma(drv_data, drv_data->cur_chip);
-
-		return IRQ_HANDLED;
-	}
-
-#ifdef NEED_BOUNCE_BUFFERS
-	if (drv_data->rx)
-		memcpy(drv_data->rx, drv_data->rx_buf, drv_data->map_len);
-#else
-
 	if (drv_data->tx_mapped_by_us) {
 
 		dma_unmap_single(&drv_data->pdev->dev, drv_data->tx_dma,
@@ -548,7 +529,6 @@ static irqreturn_t spi_irq(int irq, void *dev_id)
 				(u32)drv_data->rx_dma,
 				drv_data->len);*/
 	}
-#endif
 
 	dev_dbg(&drv_data->pdev->dev, "interrupt di status: %#x\n",
 		spi_readl(drv_data, SPI_DI_STATUS));
@@ -576,7 +556,6 @@ static irqreturn_t spi_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-#ifndef NEED_BOUNCE_BUFFERS
 /* Helper:*/
 static int map_buffers(struct driver_data *drv_data,
 		struct spi_message *message,
@@ -661,7 +640,6 @@ static int map_buffers(struct driver_data *drv_data,
 	}
 	return 0;
 }
-#endif
 
 static void pump_transfers(unsigned long data)
 {
@@ -728,28 +706,6 @@ static void pump_transfers(unsigned long data)
 		wmb();
 	}
 
-#ifdef NEED_BOUNCE_BUFFERS
-	/* Copy data to bounce buffer due to DMAC bug */
-	if (transfer->len > DMA_MIN_SIZE) {
-		if (drv_data->tx)
-			memcpy(drv_data->tx_buf, drv_data->tx, transfer->len);
-		else
-			/*send out zeros*/
-			memset(drv_data->tx_buf, 0x00, transfer->len);
-
-		drv_data->rx_dma = drv_data->rx_dma_start;
-		drv_data->tx_dma = drv_data->tx_dma_start;
-
-	}
-
-	if (transfer->len > BURST_BYTES)
-		drv_data->len = transfer->len & BURST_MASK;
-	else
-		drv_data->len = transfer->len;
-
-	drv_data->tail_len = transfer->len - drv_data->len;
-
-#else	/* MDC */
 	/* setup dma mappings for buffers, no need for
 	 * the bounce buffer!
 	 */
@@ -761,9 +717,7 @@ static void pump_transfers(unsigned long data)
 			return;
 		}
 		drv_data->len = transfer->len;
-		drv_data->tail_len = 0;
 	}
-#endif
 
 	drv_data->map_len = transfer->len;
 
@@ -1179,7 +1133,6 @@ static int __init img_spi_probe(struct platform_device *pdev)
 	struct driver_data *drv_data = NULL;
 	struct resource *irq_resource, *mem_resource;
 	int status = 0;
-	unsigned long clk_rate;
 
 	/* Allocate master with space for drv_data */
 	master = spi_alloc_master(dev, sizeof(struct driver_data));
@@ -1230,13 +1183,15 @@ static int __init img_spi_probe(struct platform_device *pdev)
 	/* try setting the clock to the requested rate */
 	if (platform_info->clk_rate) {
 		status = clk_set_rate(drv_data->clk, platform_info->clk_rate);
-		clk_rate = clk_get_rate(drv_data->clk);
-		if (clk_rate != platform_info->clk_rate) {
+		drv_data->clk_rate = clk_get_rate(drv_data->clk);
+		if (drv_data->clk_rate != platform_info->clk_rate) {
 			dev_warn(dev,
 				 "SPI clock requested: %lu HZ. Actual SPI clock: %lu (status=%d)\n",
-				 platform_info->clk_rate, clk_rate, status);
+				 platform_info->clk_rate, drv_data->clk_rate, status);
 		}
 		status = 0;
+	} else {
+		drv_data->clk_rate = clk_get_rate(drv_data->clk);
 	}
 
 	/* try enabling the clock */

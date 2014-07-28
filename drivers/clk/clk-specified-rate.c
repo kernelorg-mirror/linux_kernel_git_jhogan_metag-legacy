@@ -163,7 +163,7 @@ void __init of_specified_clk_setup(struct device_node *node)
 		       __func__, clk_name, len);
 		goto err_iounmap;
 	}
-	num_rates = len / (sizeof(*rates)*2);
+	num_rates = len / sizeof(*rates);
 
 	rates = kzalloc(sizeof(*rates)*num_rates, GFP_KERNEL);
 	if (!rates) {

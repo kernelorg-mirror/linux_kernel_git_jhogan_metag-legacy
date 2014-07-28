@@ -45,6 +45,8 @@
 #define _80211IF_DEBUG(...) do { } while (0)
 #endif
 
+extern int reset_hal_params(void);
+
 static char   *mac_addr = DEFAULT_MAC_ADDRESS;
 
 /* Its value will be the default mac address and it can only be updated with the
@@ -149,6 +151,27 @@ static struct ieee80211_supported_band band_5ghz = {
 	.n_bitrates = ARRAY_SIZE(ofdm_rates),
 };
 
+static const struct ieee80211_iface_limit if_limit1[] = {{ .max = 4, .types = BIT(NL80211_IFTYPE_STATION)} };
+static const struct ieee80211_iface_limit if_limit2[] = {{ .max = 2, .types = BIT(NL80211_IFTYPE_STATION)} };
+static const struct ieee80211_iface_limit if_limit3[] = {{ .max = 1, .types = BIT(NL80211_IFTYPE_STATION),},
+							 { .max = 1, .types = BIT(NL80211_IFTYPE_AP)|
+									      BIT(NL80211_IFTYPE_P2P_CLIENT)|
+								      BIT(NL80211_IFTYPE_ADHOC)|
+									      BIT(NL80211_IFTYPE_P2P_GO)} };
+static const struct ieee80211_iface_limit if_limit4[] = {{ .max = 1, .types = BIT(NL80211_IFTYPE_AP)},
+							 { .max = 1, .types = BIT(NL80211_IFTYPE_P2P_GO)} };
+
+static const struct ieee80211_iface_limit if_limit5[] = {{ .max = 1, .types = BIT(NL80211_IFTYPE_ADHOC)},
+							 { .max = 1, .types = BIT(NL80211_IFTYPE_P2P_CLIENT)} };
+
+static const struct ieee80211_iface_combination if_comb[] = {
+	{ .limits = if_limit1, .n_limits = ARRAY_SIZE(if_limit1), .max_interfaces = 4, .num_different_channels = 1},
+	{ .limits = if_limit2, .n_limits = ARRAY_SIZE(if_limit2), .max_interfaces = 2, .num_different_channels = 1},
+	{ .limits = if_limit3, .n_limits = ARRAY_SIZE(if_limit3), .max_interfaces = 2, .num_different_channels = 1},
+	{ .limits = if_limit4, .n_limits = ARRAY_SIZE(if_limit4), .max_interfaces = 2, .num_different_channels = 1},
+	{ .limits = if_limit5, .n_limits = ARRAY_SIZE(if_limit5), .max_interfaces = 2, .num_different_channels = 1}
+};
+
 static int conv_str_to_byte(unsigned char *byte,
 		unsigned char *str,
 		int len)
@@ -204,7 +227,7 @@ static unsigned char get_ps_info(unsigned char *ie_data,
 }
 
 static void tx(struct ieee80211_hw *hw,
-		struct ieee80211_tx_control *control,
+		struct ieee80211_tx_control *tx_control,
 		struct sk_buff *skb)
 {
 	struct mac80211_dev *dev = hw->priv;
@@ -295,7 +318,7 @@ static int add_interface(struct ieee80211_hw *hw,
 
 	iftype = vif->type;
 	v = vif;
-	vif->driver_flags |= IEEE80211_VIF_BEACON_FILTER;
+
 	if (!(iftype == NL80211_IFTYPE_STATION ||
 				iftype == NL80211_IFTYPE_ADHOC ||
 				iftype == NL80211_IFTYPE_AP)) {
@@ -677,18 +700,24 @@ static void sw_scan_start(struct ieee80211_hw *hw)
 {
 	_80211IF_DEBUG("%s-80211IF: scan started\n", ((struct mac80211_dev *)(hw->priv))->name);
 
-	/*
-	 * TODO::
-	 */
+	uccp310wlan_prog_scan_ind(1);
 
 }
 
 static void sw_scan_complete(struct ieee80211_hw *hw)
 {
+	struct mac80211_dev   *dev = hw->priv;
+	struct ieee80211_vif  *vif;
+	int vif_index;
+
 	_80211IF_DEBUG("%s-80211IF: scan stopped\n", ((struct mac80211_dev *)(hw->priv))->name);
-	/*
-	 * TODO::
-	 */
+	if (dev->active_vifs  == 1) {
+		for (vif_index = 0; vif_index < wifi->params.num_vifs; vif_index++) {
+			vif = (struct ieee80211_vif *)rcu_dereference(dev->vifs[vif_index]);
+			if (vif && (vif->type == NL80211_IFTYPE_STATION) && (vif->bss_conf.assoc))
+				uccp310wlan_prog_scan_ind(0);
+		}
+	}
 }
 
 static void init_hw(struct ieee80211_hw    *hw)
@@ -696,12 +725,19 @@ static void init_hw(struct ieee80211_hw    *hw)
 	struct mac80211_dev  *dev = (struct mac80211_dev *)hw->priv;
 	/* Supported Interface Types and other Default values*/
 	hw->wiphy->interface_modes = BIT(NL80211_IFTYPE_STATION) | BIT(NL80211_IFTYPE_ADHOC) | BIT(NL80211_IFTYPE_AP) | BIT(NL80211_IFTYPE_P2P_CLIENT) | BIT(NL80211_IFTYPE_P2P_GO);
+	if (wifi->params.num_vifs > 1) {
+		hw->wiphy->iface_combinations = if_comb;
+		hw->wiphy->n_iface_combinations = sizeof(if_comb)/sizeof(struct ieee80211_iface_combination);
+	}
 
 	hw->flags = IEEE80211_HW_SIGNAL_DBM  |
 		IEEE80211_HW_SUPPORTS_PS ; /* umac */
 	hw->flags |= IEEE80211_HW_SUPPORTS_UAPSD;
 	hw->flags |= IEEE80211_HW_HOST_BROADCAST_PS_BUFFERING;
 	hw->flags |= IEEE80211_HW_SUPPORTS_PER_STA_GTK;
+	hw->flags |= IEEE80211_HW_CONNECTION_MONITOR;
+
+	hw->flags |= IEEE80211_HW_MFP_CAPABLE;
 
 	hw->max_listen_interval = 10; /* umac */
 	hw->max_rates = 4; /* umac */
@@ -727,6 +763,8 @@ static void init_hw(struct ieee80211_hw    *hw)
 	}
 	hw->wiphy->flags |= WIPHY_FLAG_AP_UAPSD;
 	hw->wiphy->flags |= WIPHY_FLAG_IBSS_RSN;
+
+	hw->wiphy->flags |= WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL;
 
 }
 static struct ieee80211_ops ops = {
@@ -827,6 +865,7 @@ out:
 
 static ssize_t proc_read(struct seq_file *m, void *v)
 {
+
 	seq_printf(m, "************* PARAMS ***********\n");
 	seq_printf(m, "dot11a_support = %d\n", wifi->params.dot11a_support);
 	seq_printf(m, "sensitivity = %d\n", wifi->params.ed_sensitivity);
@@ -835,6 +874,7 @@ static ssize_t proc_read(struct seq_file *m, void *v)
 	seq_printf(m, "production_test = %d\n", wifi->params.production_test);
 	seq_printf(m, "show_phy_stats = %d\n", wifi->params.show_phy_stats);
 	seq_printf(m, "num_vifs = %d\n", wifi->params.num_vifs);
+	seq_printf(m, "max_bcn_loss = %d\n", wifi->params.max_bcn_loss);
 	seq_printf(m, "************* STATS ***********\n");
 	seq_printf(m, "rx_packet_count = %d\n", wifi->stats.rx_packet_count);
 	if (wifi->params.show_phy_stats) {
@@ -896,11 +936,17 @@ static ssize_t proc_read(struct seq_file *m, void *v)
 		seq_printf(m, "\n");
 	}
 #endif
+	seq_printf(m, "TS1 = %llu\n", (unsigned long long)get_unaligned_le64(wifi->params.ts1));
+	seq_printf(m, "TS2 = %lu\n", (unsigned long)get_unaligned_le32(wifi->params.ts2));
+	seq_printf(m, "BSSID = %pM\n", (wifi->params.bssid));
+
 	return 0;
 }
 
-static ssize_t proc_write(struct file *file, const char __user *buffer,
-			  size_t count, loff_t *ppos)
+static ssize_t proc_write(struct file *file,
+			  const char __user *buffer,
+			  size_t count,
+			  loff_t *ppos)
 {
 	char buf[100];
 	int ret;
@@ -931,6 +977,12 @@ static ssize_t proc_write(struct file *file, const char __user *buffer,
 			printk(KERN_ERR "Invalid parameter value.\n");
 		else
 			wifi->params.ed_sensitivity = sval;
+	} else if (!strncmp(buf, "dyn_ed_ceiling=", 15)) {
+		ret = kstrtol(buf+15, 0, &sval);
+		if (sval > -51 || sval < -96 || (sval % 3 != 0))
+			printk(KERN_ERR "Invalid parameter value.\n");
+		else
+			wifi->params.dyn_ed_ceiling = sval;
 	} else if (!strncmp(buf, "auto_sensitivity=", 17)) {
 		ret = kstrtoul(buf+17, 0, &val);
 		if ((val == 0) || (val == 1))
@@ -990,6 +1042,23 @@ static ssize_t proc_write(struct file *file, const char __user *buffer,
 			printk(KERN_ERR "Invalid parameter value.\n");
 	} else if (!strncmp(buf, "get_rx_stats=", 13)) {
 		uccp310wlan_prog_mib_stats();
+	} else if (!strncmp(buf, "reset_hal_params=", 17)) {
+		ret = kstrtoul(buf+17, 0, &val);
+		if (((struct mac80211_dev *)(wifi->hw->priv))->state != STARTED) {
+			if (val != 1)
+				printk(KERN_ERR "Invalid parameter value.\n");
+			else
+				reset_hal_params();
+		} else {
+			printk(KERN_ERR "HAL parameters reset can be done only when all interface are down\n");
+		}
+	} else if (!strncmp(buf, "max_bcn_loss=", 13)) {
+		ret = kstrtoul(buf+13, 0, &val);
+		if (val >= 5)
+			wifi->params.max_bcn_loss = val;
+		else
+			printk(KERN_ERR "Invalid parameter value (should be >=5)");
+
 	} else {
 		printk(KERN_ERR "Invalid parameter name.\n");
 	}
@@ -1001,11 +1070,12 @@ static int proc_open(struct inode *inode, struct file *file)
 	return single_open(file, proc_read, NULL);
 }
 
-static const struct file_operations params_fops = {
+static const struct file_operations proc_fops = {
 	.open = proc_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.write = proc_write,
+	.release = single_release,
+	.write = proc_write
 };
 
 static int proc_init(void)
@@ -1027,7 +1097,7 @@ static int proc_init(void)
 	}
 
 	entry = proc_create("params", 0644, wifi->umac_proc_dir_entry,
-			    &params_fops);
+			    &proc_fops);
 	if (!entry) {
 		printk(KERN_ERR "Failed to create proc entry\n");
 		err = -ENOMEM;
@@ -1038,9 +1108,11 @@ static int proc_init(void)
 	memset(&wifi->params, 0, sizeof(struct wifi_params));
 	memset(wifi->params.rf_params, 0xff, sizeof(wifi->params.rf_params));
 	wifi->params.ed_sensitivity = -84;
+	wifi->params.dyn_ed_ceiling = -51;
 	wifi->params.rf_params[0] = 0x3B;
 	wifi->params.auto_sensitivity = 1;
 	wifi->params.num_vifs = 1;
+	wifi->params.max_bcn_loss = MAX_BEACON_LOSS_COUNT;
 
 	return err;
 

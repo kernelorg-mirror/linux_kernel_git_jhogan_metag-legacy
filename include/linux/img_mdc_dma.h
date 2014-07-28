@@ -45,6 +45,7 @@ struct mdc_dma_cookie {
 /* Platform data for SOC DMA callbacks */
 struct img_mdc_soc_callbacks {
 	int (*allocate) (int, unsigned int); /* allocate a DMA channel */
+	int (*available) (int); /* Check if DMA channel is available */
 	int (*free) (int); /* free a DMA channel */
 	/*
 	 * SOC DMA specific callbacks for suspend_noirq and resume_noirq.

@@ -199,14 +199,16 @@ static int clk_tz1090_pll_set_rate(struct clk_hw *hw, unsigned long rate,
 	/* allow 5us after clkf before deasserting reset */
 	udelay(5);
 
-	/* take PLL out of reset */
+	/* take PLL out of reset and enable fasten */
 	ctl1 &= ~PLL_CTL1_RESET_B;
+	ctl1 |= PLL_CTL1_FASTEN_B;
 	writel(ctl1, pll->reg + PLL_CTL1);
 
 	/* count at least 500 divided ref clks to allow time to lock */
 	msleep(1 + 500*1000*(clkr+1)/parent_rate);
 
-	/* take PLL out of bypass */
+	/* take PLL out of fasten / bypass */
+	ctl1 &= ~PLL_CTL1_FASTEN_B;
 	ctl1 &= ~PLL_CTL1_BYPASS_B;
 	writel(ctl1, pll->reg + PLL_CTL1);
 

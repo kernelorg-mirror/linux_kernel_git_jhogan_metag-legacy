@@ -172,7 +172,7 @@ static void __init of_metag_mux_clk_setup(struct device_node *node)
 	if (!parent_names) {
 		pr_err("%s(%s): could not allocate %u parent names\n",
 		       __func__, clk_name, num_parents);
-		goto err_kfree;
+		goto out_kfree;
 	}
 
 	/* fill in the parent names */
@@ -190,7 +190,7 @@ static void __init of_metag_mux_clk_setup(struct device_node *node)
 		if (default_clock >= num_parents) {
 			pr_err("%s(%s): default-clock %u out of range (%u bits)\n",
 			       __func__, clk_name, default_clock, width);
-			goto err_kfree;
+			goto out_kfree;
 		}
 	} else {
 		default_clock = -1;
@@ -200,7 +200,7 @@ static void __init of_metag_mux_clk_setup(struct device_node *node)
 	if (!reg) {
 		pr_err("%s(%s): of_iomap failed\n",
 		       __func__, clk_name);
-		goto err_kfree;
+		goto out_kfree;
 	}
 
 	if (of_find_property(node, "linux,clk-set-rate-parent", NULL))
@@ -217,11 +217,12 @@ static void __init of_metag_mux_clk_setup(struct device_node *node)
 
 	of_clk_add_provider(node, of_clk_src_simple_get, clk);
 
-	return;
+	/* parent_names is copied by clk_register(), so it can now be freed */
+	goto out_kfree;
 
 err_iounmap:
 	iounmap(reg);
-err_kfree:
+out_kfree:
 	kfree(parent_names);
 }
 CLK_OF_DECLARE(metag_mux_clk, "img,meta-mux-clock", of_metag_mux_clk_setup);

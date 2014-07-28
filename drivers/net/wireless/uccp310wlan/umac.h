@@ -63,15 +63,22 @@ extern spinlock_t timing_lock;
 #define   SUPPORTED_FILTERS             (FIF_ALLMULTI | FIF_BCN_PRBRESP_PROMISC)
 #define   MAX_BUFF_POOL_ELEMENTS        9 /* Must be alteast 6, one for each AC + two for BCN queue + spares*/
 #define	  MAX_TX_QUEUE_LEN		20
+#define	  MAX_BEACON_LOSS_COUNT		20 /*Beacon loss timeout is calculated as N frames times the advertised beacon interval*/
 
 struct wifi_params {
 	int            ed_sensitivity;
+	int	       dyn_ed_ceiling;
 	int            num_vifs;
 	unsigned char  auto_sensitivity;
 	unsigned char  rf_params[8];
 	unsigned char  show_phy_stats;
 	unsigned char  production_test;
 	unsigned int   dot11a_support;
+	unsigned int   max_bcn_loss;
+	unsigned char  ts1[8];
+	unsigned char  ts2[4];
+	unsigned char  bssid[ETH_ALEN];
+
 };
 
 struct wifi_stats {

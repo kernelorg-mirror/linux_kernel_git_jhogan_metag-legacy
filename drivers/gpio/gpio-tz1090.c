@@ -492,7 +492,7 @@ int comet_gpio_pullup_type(unsigned int gpio, unsigned int pullup)
 {
 	struct tz1090_gpio_bank *bank = NULL;
 	struct comet_gpio_pullup *gpio_pullup;
-	unsigned int offset = 0, value;
+	unsigned int offset = 0, index, value;
 	int idx;
 	int lstat;
 
@@ -501,15 +501,16 @@ int comet_gpio_pullup_type(unsigned int gpio, unsigned int pullup)
 	if (idx < 0)
 		return -EINVAL;
 
-	bank = comet_gpio_chip[idx];
+	bank = comet_gpio_chip[0];
 	gpio_pullup = &gpio_pullup_table[gpio];
+	index = gpio_pullup->index << 2;
 	offset = gpio_pullup->offset;
 
 	__global_lock2(lstat);
-	value = tz1090_gpio_read(bank, REG_GPIO_PU_PD);
+	value = tz1090_gpio_read(bank, REG_GPIO_PU_PD + index);
 	value &= ~(0x3 << offset);
 	value |= (pullup & 0x3) << offset;
-	tz1090_gpio_write(bank, REG_GPIO_PU_PD, value);
+	tz1090_gpio_write(bank, REG_GPIO_PU_PD + index, value);
 	__global_unlock2(lstat);
 
 	return 0;

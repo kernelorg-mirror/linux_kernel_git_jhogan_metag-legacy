@@ -99,6 +99,10 @@ static void setup_dma_channel(int dmanr, unsigned int periph)
 	__global_unlock2(lstat);
 }
 
+static int img_is_chan_available(int dmanr)
+{
+	return dma_channels[dmanr] == IMG_DMA_CHANNEL_AVAILABLE;
+}
 
 static int img_request_dma(int dmanr, unsigned int periph)
 {
@@ -267,6 +271,7 @@ device_initcall(proc_dma_init);
 
 static struct img_mdc_soc_callbacks comet_dma_callbacks = {
 	.allocate = img_request_dma,
+	.available = img_is_chan_available,
 	.free = img_free_dma,
 	.suspend = img_dma_suspend,
 	.resume = img_dma_resume,

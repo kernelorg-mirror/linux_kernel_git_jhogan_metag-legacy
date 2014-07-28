@@ -128,26 +128,41 @@ unsigned long metag_cache_lock(unsigned int flags, unsigned long phys,
 		return 0;
 	}
 
-	/* First take account of offset of memory in page */
-	offset = offset_in_page(phys);
-	rounded_size = size + offset;
+	/* Round down the physical address to a cache line boundary */
+	offset = phys & (DCACHE_LINE_BYTES - 1);
 	phys -= offset;
 	ccr += offset;
+	size += offset;
+	/* Round up the size to a cache line boundary */
+	size = (size + (DCACHE_LINE_BYTES - 1)) & -DCACHE_LINE_BYTES;
 
-	/* Get rounded up log2 of size */
-	rounded_size_sh = ilog2((rounded_size<<1)-1) - MMCU_TnCCM_REGSZ0_POWER;
-	if (rounded_size_sh < 0)
-		rounded_size_sh = 0;
-	rounded_size = (1 << MMCU_TnCCM_REGSZ0_POWER) << rounded_size_sh;
+	/* The size of the current global cache partition may be limited too */
+	if (size > ((flags & METAG_COREMEM_IMEM)
+			? get_global_icache_size()
+			: get_global_dcache_size()))
+		return 0;
+
+	/*
+	 * The physical address must be size aligned, so the size we choose
+	 * depends on what boundaries the region crosses.
+	 * A simple XOR will show which power of 2 boundaries the region
+	 * crosses.
+	 */
+	rounded_size_sh = ilog2(phys ^ (phys + size - 1)) + 1;
+	if (rounded_size_sh < MMCU_TnCCM_REGSZ0_POWER)
+		rounded_size_sh = MMCU_TnCCM_REGSZ0_POWER;
+	rounded_size = 1 << rounded_size_sh;
+	rounded_size_sh -= MMCU_TnCCM_REGSZ0_POWER;
+
 
 	/* There's a maximum amount of lockable cache */
 	if (rounded_size > MMCU_TnCCM_REGSZ_MAXBYTES)
 		return 0;
-	/* The size of the current global cache partition may be limited too */
-	if (rounded_size > ((flags & METAG_COREMEM_IMEM)
-				? get_global_icache_size()
-				: get_global_dcache_size()))
-		return 0;
+
+	/* First take account of offset of memory in page */
+	offset = phys & (rounded_size - 1);
+	phys -= offset;
+	ccr += offset;
 
 	ccmctrl = metag_in32(ccmctrl_addr);
 	if (ccmctrl & MMCU_TnCCM_ENABLE_BIT)

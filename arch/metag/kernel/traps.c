@@ -1210,8 +1210,7 @@ void __cpuinit per_cpu_trap_init(unsigned long cpu)
 
 	set_trigger_mask(TBI_INTS_INIT(thread) | /* interrupts */
 			 TBI_TRIG_BIT(TBID_SIGNUM_LWK) | /* low level kick */
-			 TBI_TRIG_BIT(TBID_SIGNUM_SW1) |
-			 TBI_TRIG_BIT(TBID_SIGNUM_SWS));
+			 TBI_TRIG_BIT(TBID_SIGNUM_SW1));
 
 	/* non-priv - use current stack */
 	int_context.Sig.pCtx = NULL;
@@ -1254,14 +1253,14 @@ void __init trap_init(void)
 	_pTBI->fnSigs[TBID_SIGNUM_SW1] = switch1_wrapper;
 	_pTBI->fnSigs[TBID_SIGNUM_SW2] = switchx_wrapper;
 	_pTBI->fnSigs[TBID_SIGNUM_SW3] = switchx_wrapper;
-	_pTBI->fnSigs[TBID_SIGNUM_SWK] = kick_wrapper;
+	_pTBI->fnSigs[TBID_SIGNUM_LWK] = kick_wrapper;
 #else
 	_pTBI->fnSigs[TBID_SIGNUM_XXF] = fault_handler;
 	_pTBI->fnSigs[TBID_SIGNUM_SW0] = switchx_handler;
 	_pTBI->fnSigs[TBID_SIGNUM_SW1] = switch1_handler;
 	_pTBI->fnSigs[TBID_SIGNUM_SW2] = switchx_handler;
 	_pTBI->fnSigs[TBID_SIGNUM_SW3] = switchx_handler;
-	_pTBI->fnSigs[TBID_SIGNUM_SWK] = kick_handler;
+	_pTBI->fnSigs[TBID_SIGNUM_LWK] = kick_handler;
 #endif
 
 #ifdef CONFIG_METAG_META21
