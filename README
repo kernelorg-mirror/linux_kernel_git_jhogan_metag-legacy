@@ -1,0 +1,50 @@
+Metag Architecture Legacy Repository
+====================================
+
+Maintainer: James Hogan <james.hogan@imgtec.com>
+
+This repository is for the official / legacy version of ImgTec MetaLinux, i.e.
+for the arch/metag directory in the Linux kernel source.
+
+The main branches are as follows:
+
+master:
+	This contains the latest version of MetaLinux, which is the official
+	version of MetaLinux with more extensive SoC support than was merged
+	into mainline. It has a flattened history, and is kept mainly for
+	reference and archival purposes as MetaLinux will see no more official
+	releases (hence being referred to as legacy). It will never be rebased
+	(but nor is it likely to be updated).
+
+	Features include:
+	- Full SoC support for TZ1090.
+	- Full board support for the TZ1090 based Minimoprh & MetaMorph boards.
+	- Partial board support for Polaris (Pure Sensia 200D Connect).
+	- Various smaller arch features such as KGDB.
+
+	Particular thanks go to Will Newton, Graham Whaley, Neil Jones, George
+	Shore, Matt Fleming, Markos Chandras, Paul Burton, and Qais Yousef who
+	have all made significant contributions to the Meta port over the years.
+
+
+Architecture Documentation
+--------------------------
+
+Architecture documentation can be found on the ImgTec download page at:
+
+https://imgtec.com/downloads
+
+Look for:
+	"Meta HTP.GP Instruction Set"
+	"Meta HTP.GP Architecture Overview"
+
+
+Buildroot and QEMU
+------------------
+
+Buildroot and QEMU ports for Meta can be found on GitHub:
+
+https://github.com/img-meta
+
+Buildroot can build a Meta toolchain, and QEMU can be used to emulate a Meta in
+order to run a Meta Linux kernel.
